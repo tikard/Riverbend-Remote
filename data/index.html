@@ -1,0 +1,73 @@
+<!-- Complete project details: https://randomnerdtutorials.com/esp8266-nodemcu-web-server-websocket-sliders/ -->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Riverbend Relay/Contol</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+
+<body>
+    <div class="topnav">
+        <h1>Riverbend Relay/Contol Panel</h1>
+    </div>
+    <div class="content">
+        <p>
+        <h2>Select Well ID and Press Request Type/Command to send MSG to WELL</h2>
+        </p>
+        <div class="card-grid">
+            <div class="card">
+                <p class="card-title"> Well ID</p>
+                <p <form>
+                    <select class="welldropdown" name="welldropdown" id="wellID">
+                        <option value="1" selected>Well 1</option>
+                        <option value="2">Well 2</option>
+                        <option value="3">Well 3</option>
+                    </select>
+                    </form>
+                </p>
+            </div>
+            <div class="card">
+                <p class="card-title">Request Type</p>
+                <p>
+                    <input class="button" type="button" id="state" value="STATE" onclick="buttonpressed('STATE')"><br>
+                    <input class="button" type="button" id="status" value="STATUS"
+                        onclick="buttonpressed('STATUS')"><br>
+                    <input class="button" type="button" id="Errors" value="ERRORS"
+                        onclick="buttonpressed('ERRORS')"><br>
+                    <input class="button" type="button" id="Heartbeat" value="HEARTBEAT"
+                        onclick="buttonpressed('HEARTBEAT')">
+                </p>
+            </div>
+            <div class="card">
+                <p class="card-title">Command</p>
+                <p>
+                    <input class="button" type="button" id="cmdFill" value="Start Fill"
+                        onclick="cmdbuttonpressed('FILL')"><br>
+                    <input class="button" type="button" id="cmdStopFill" value="Stop Fill"
+                        onclick="cmdbuttonpressed('STOP')"><br>
+                    <input class="button" type="button" id="cmdRestart" value="Restart Well"
+                        onclick="cmdbuttonpressed('RESTART')"><br>
+                </p>
+            </div>
+
+        </div>
+
+        <p>Last Message Received<br>
+            <textarea class="lastmsg" id="lastmsg" name="lastmsg" rows="1" cols="40"></textarea>
+        </p>
+
+        <p>MESSAGE HISTORY (All Received Messages from Wells)<br>
+            <textarea class="msghistory" id="msghistory" name="msghistory" rows="15" cols="40" resize="none"></textarea>
+        <div><textarea class="msgCount" id="msgCount" name="msgCount" rows="1" cols="5" resize="none"></textarea>
+            <input class="button" type="button" id="ClrHistory" value="Clear History" width="100%"
+                onclick="clearHistory()">
+        </div>
+        </p>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
