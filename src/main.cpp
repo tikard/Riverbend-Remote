@@ -4,6 +4,10 @@
   Use WebSockets to talk to a control web page
   Uses LORA to xmit and recieve WELL msgs
 
+  Initial commit to Github
+  Version 0.1  Full working version thru Well_Receiver to Riverbend Well Unit  11/19/21
+
+
 *********/
 
 // Import required libraries
