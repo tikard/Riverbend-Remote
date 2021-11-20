@@ -100,13 +100,6 @@ DynamicJsonDocument doc(2048);
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
-
-/*
-  function addtxt(input) {
-    var obj=document.getElementById(input)
-    obj.value+="Msg from well 3\n";
-  }
-*/
 //*******************  Well Functions
 // Helpers to send output to right port
 void debugPrint(String s){ Serial.print(s);}
@@ -164,68 +157,13 @@ void send(String msg)
     debugPrintln("Sending LORA Packet out to wells");
 }
 
-
-void requestState(String wellNumber){
+void sendrequestLORA(int wellNumber, int wmt){
   RadioMsgRespone = "";
   RadioMsgRespone = RadioMsgRespone + String(RELAY_ID) + " ";
   RadioMsgRespone = RadioMsgRespone + wellNumber + " ";
-  RadioMsgRespone = RadioMsgRespone  + String(WELL_MSG_TYPE::WELL_STATE) + " ";
+  RadioMsgRespone = RadioMsgRespone  + String(wmt) + " ";
   RadioMsgRespone = RadioMsgRespone + "0";
-	send(RadioMsgRespone);
-}
-
-void requestStatus(String wellNumber){
-  RadioMsgRespone = "";
-  RadioMsgRespone = RadioMsgRespone + String(RELAY_ID) + " ";
-  RadioMsgRespone = RadioMsgRespone + wellNumber + " ";
-  RadioMsgRespone = RadioMsgRespone  + String(WELL_MSG_TYPE::WELL_STATUS) + " ";
-  RadioMsgRespone = RadioMsgRespone + "0" ;
-	send(RadioMsgRespone);
-}
-
-void requestStart(String wellNumber){
-  RadioMsgRespone = "";
-  RadioMsgRespone = RadioMsgRespone + String(RELAY_ID) + " ";
-  RadioMsgRespone = RadioMsgRespone + wellNumber + " ";
-  RadioMsgRespone = RadioMsgRespone  + String(WELL_MSG_TYPE::START_FILL) + " ";
-  RadioMsgRespone = RadioMsgRespone + "0";
-	send(RadioMsgRespone);
-}
-
-void requestStop(String wellNumber){
-  RadioMsgRespone = "";
-  RadioMsgRespone = RadioMsgRespone + String(RELAY_ID) + " ";
-  RadioMsgRespone = RadioMsgRespone + wellNumber + " ";
-  RadioMsgRespone = RadioMsgRespone  + String(WELL_MSG_TYPE::STOP_FILL) + " ";
-  RadioMsgRespone = RadioMsgRespone + "0";
-	send(RadioMsgRespone);
-}
-void requestRestart(String wellNumber){
-  RadioMsgRespone = "";
-  RadioMsgRespone = RadioMsgRespone + String(RELAY_ID) + " ";
-  RadioMsgRespone = RadioMsgRespone + wellNumber + " ";
-  RadioMsgRespone = RadioMsgRespone  + String(WELL_MSG_TYPE::RESTART_WELL) + " ";
-  RadioMsgRespone = RadioMsgRespone + "0";
-	send(RadioMsgRespone);
-}
-
-
-void requestErrors(String wellNumber){
-  RadioMsgRespone = "";
-  RadioMsgRespone = RadioMsgRespone + String(RELAY_ID) + " ";
-  RadioMsgRespone = RadioMsgRespone + wellNumber + " ";
-  RadioMsgRespone = RadioMsgRespone  + String(WELL_MSG_TYPE::WELL_ERRORS) + " ";
-  RadioMsgRespone = RadioMsgRespone + "0";
-	send(RadioMsgRespone);
-}
-
-void requestHeartBeat(String wellNumber){
-  RadioMsgRespone = "";
-  RadioMsgRespone = RadioMsgRespone + String(RELAY_ID) + " ";
-  RadioMsgRespone = RadioMsgRespone + wellNumber + " ";
-  RadioMsgRespone = RadioMsgRespone  + String(WELL_MSG_TYPE::HEARTBEAT) + " ";
-  RadioMsgRespone = RadioMsgRespone + "0";
-	send(RadioMsgRespone);
+	send(RadioMsgRespone); 
 }
 
 void notifyClients2(String msg) {
@@ -240,7 +178,27 @@ void notifyClients2(String msg) {
   ws.textAll(requestBody);
 }
 
-void processMsg(String msg){
+void processMsg(String msg){  // process a JSON msg from a well station LORA
+/*
+  StaticJsonDocument<512> doc;
+
+  DeserializationError error = deserializeJson(doc, msg);
+  if (error) {
+    Serial.println(error.c_str()); 
+    return;
+  }
+
+  String radioID  = doc["radioID"];
+  String wellID   = doc["wellID"];
+  String msgType  = doc["msgType"];
+  String msgValue = doc["msgValue"];
+
+  wellMSG.Radio_ID  = radioID.toInt();
+  wellMSG.Well_ID   = wellID.toInt();
+  //wellMSG.Msg_Type  = msgType;
+  wellMSG.Msg_Value = msgValue.toInt();
+*/
+
   // process a message 
     // reads in the 4 part Well CMD msg
 
@@ -317,58 +275,31 @@ void notifyClients() {
   ws.textAll(String(ledState));
 }
 
-void remoteRequestSend(String cmd, String wellID){
-  if (cmd.equals("STATE")){
-    requestState(wellID);
-    return;
-  }
-
-  if (cmd.equals("STATUS")){
-    requestStatus(wellID);
-    return;
-  }
-
-  if (cmd.equals("ERRORS")){
-    requestErrors(wellID);
-    return;
-  }
-
-  if (cmd.equals("HEARTBEAT")){
-    requestHeartBeat(wellID);
-    return;
-  }
-
-  if (cmd.equals("FILL")){
-    requestStart(wellID);
-    return;
-  }
-
-  if (cmd.equals("STOP")){
-    requestStop(wellID);
-    return;
-  }
-
-  if (cmd.equals("RESTART")){
-    requestRestart(wellID);
-    return;
-  }
-}
-
 void serverRequest(void *arg, uint8_t *data, size_t len) {
   //AwsFrameInfo *info = (AwsFrameInfo*)arg;
 
-  deserializeJson(doc, data);
+  DeserializationError error = deserializeJson(doc, data);
+  if (error) {
+      Serial.println(error.c_str()); 
+      return;
+    }
 
-  String reqname = doc["requestType"];
-  //Serial.println(reqname);
+  int reqradioID = doc["radioID"];
+  int reqwellID  = doc["wellID"];
+  int reqreqType = doc["requestType"];
+  int reqvalue   = doc["msgValue"];
 
-  String reqwellid = doc["wellID"];
-  //Serial.println(reqwellid);
-
-  remoteRequestSend(reqname, reqwellid);  // see what they want to do
+  //Serial.println("Request from RELAY");
+  //Serial.println("Radio ID =" + reqradioID);
+  //Serial.println("Well ID =" + reqwellID);
+  //Serial.println("Req type =" + reqreqType);
+  //Serial.println("Req value =" + reqvalue);
+  
+  sendrequestLORA(reqwellID, reqreqType);  // see what they want to do
 }
 
-void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
+// recieved data on websocket
+void wsDataEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
              void *arg, uint8_t *data, size_t len) {
 
   //Serial.println("Got Websocket request");
@@ -380,6 +311,7 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
       Serial.printf("WebSocket client #%u disconnected\n", client->id());
       break;
     case WS_EVT_DATA:
+      //Serial.println("Data on WEBSOCKET")  ;
       serverRequest(arg, data, len);     
       break;
     case WS_EVT_PONG:
@@ -389,7 +321,7 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 }
 
 void initWebSocket() {
-  ws.onEvent(onEvent);
+  ws.onEvent(wsDataEvent);
   server.addHandler(&ws);
 }
 
@@ -642,17 +574,13 @@ void loop() {
   ws.cleanupClients();
   digitalWrite(ledPin, ledState);
 
-  sleep(1);
-  //ws.textAll("TRACY");
-  sleep(1);
-  //ws.textAll("3");
+  delay(250);
 
 
 
   if(receiveflag){
     debugPrintln("Receive flag true in main loop");
     // *********** Take care of this packet if it is for this location
-
     LoRa.receive();
     
     processMsg(packet);  // Process/discard the message
@@ -673,7 +601,6 @@ void loop() {
       //debugPrintln("Request Heartbeat From Well 3 ....");
       //requestHeartBeat("3");
       toggle=!toggle;
-      //ws.textAll("3");
     }else{
       //debugPrintln("Request State From Well 3 ........");
       //requestState("3");
@@ -691,7 +618,6 @@ void loop() {
       debugPrintln("Request Heartbeat From Well 3 ....");
       requestHeartBeat("3");
       toggle=!toggle;
-      //ws.textAll("3");
     }else{
       debugPrintln("Request State From Well 3 ........");
       requestState("3");

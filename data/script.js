@@ -11,7 +11,7 @@ function onload(event) {
 }
 
 function getValues() {
-  websocket.send("getValues");
+  //websocket.send("getValues");
 }
 
 function initWebSocket() {
@@ -33,7 +33,7 @@ function onClose(event) {
 }
 
 function buttonpressed(requestType) {
-  var wellID = document.getElementById("wellID").value;
+  var wellID = document.getElementById("wellID").value; // from the pulldown
   console.log(requestType + " " + wellID);
   sendRequest(wellID, requestType);
 }
@@ -54,14 +54,16 @@ function clearHistory() {
 function sendRequest(wellID, requestType) {
   // Put this in JSON format and send to server
   var obj = new Object();
-  obj.requestType = requestType;
+  obj.radioID = 99;
   obj.wellID = wellID;
+  obj.requestType = requestType;
+  obj.msgValue = 0;
 
   //convert object to json string
   var wellRequest = JSON.stringify(obj);
 
   //convert string to Json Object
-  //console.log(JSON.parse(wellRequest)); // this is your requirement.
+  console.log(JSON.parse(wellRequest)); // Request in JSON
   websocket.send(wellRequest);
 }
 
