@@ -46,9 +46,9 @@ function cmdbuttonpressed(requestType) {
 
 function clearHistory() {
   console.log("clearing history");
+  document.getElementById("ClrHistory").value = "Clear History ";
   document.getElementById("msghistory").value = "";
   msgcounter = 0;
-  document.getElementById("msgCount").value = "No Msgs";
 }
 
 function sendRequest(wellID, requestType) {
@@ -171,7 +171,9 @@ function addtxt(input, msg) {
 }
 function updateCount() {
   msgcounter++;
-  document.getElementById("msgCount").value = msgcounter + " Msgs";
+  //document.getElementById("msgCount").value = msgcounter + " Msgs";
+  document.getElementById("ClrHistory").value =
+    "Clear History (" + msgcounter + ")";
 }
 
 function onMessage(event) {

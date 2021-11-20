@@ -159,7 +159,9 @@ void send(String msg)
     LoRa.print(msg);
     counter++;
     LoRa.endPacket();
+    //delay(500);
     LoRa.receive();
+    debugPrintln("Sending LORA Packet out to wells");
 }
 
 
@@ -400,7 +402,7 @@ String processor(const String& var){
     else{
       return "OFF";
     }
-  }
+  }return " ";
 }
 
 
@@ -648,7 +650,7 @@ void loop() {
 
 
   if(receiveflag){
-    //debugPrintln("Receive flag true in main loop");
+    debugPrintln("Receive flag true in main loop");
     // *********** Take care of this packet if it is for this location
 
     LoRa.receive();
