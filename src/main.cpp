@@ -94,7 +94,7 @@ String RadioMsgRespone = "";
 
 WELL_ERROR_MSGS well_error = WELL_ERROR_MSGS::ERR_FILL_FAIL; 
 
-DynamicJsonDocument doc(2048);
+StaticJsonDocument<512> doc;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -152,128 +152,75 @@ void send(String msg)
     LoRa.print(msg);
     counter++;
     LoRa.endPacket();
-    //delay(500);
+    delay(250);
     LoRa.receive();
     debugPrintln("Sending LORA Packet out to wells");
 }
 
-void sendrequestLORA(int wellNumber, int wmt){
-  RadioMsgRespone = "";
-  RadioMsgRespone = RadioMsgRespone + String(RELAY_ID) + " ";
-  RadioMsgRespone = RadioMsgRespone + wellNumber + " ";
-  RadioMsgRespone = RadioMsgRespone  + String(wmt) + " ";
-  RadioMsgRespone = RadioMsgRespone + "0";
-	send(RadioMsgRespone); 
+
+void sendrequestLORA(){  // send out a request to all wells via LORA 
+  String requestBody;
+
+  serializeJson(doc, requestBody); 
+  //Serial.println(requestBody);
+  send(requestBody); 
 }
 
-void notifyClients2(String msg) {
+
+void notifyClients() {  // tracy
   StaticJsonDocument<200> doc;
-    
-  doc["radiomsg"] = msg;  // Add values in the document
-    
   String requestBody;
+    
+  doc["radioID"]  = RELAY_ID;          // Add values in the document
+  doc["wellID"]   = wellMSG.Well_ID;   // Add values in the document
+  doc["msgType"]  = wellMSG.Msg_Type;  // Add values in the document
+  doc["msgValue"] = wellMSG.Msg_Value; // Add values in the document
+
   serializeJson(doc, requestBody);
 
   //Serial.println("json :" + requestBody);
   ws.textAll(requestBody);
 }
 
-void processMsg(String msg){  // process a JSON msg from a well station LORA
-/*
-  StaticJsonDocument<512> doc;
 
+void processMsg(String msg){  // process a JSON msg from a well station LORA  tracy
+
+  StaticJsonDocument<512> doc;
+  
+  doc.clear();
   DeserializationError error = deserializeJson(doc, msg);
   if (error) {
+    Serial.println(msg);
     Serial.println(error.c_str()); 
     return;
   }
 
-  String radioID  = doc["radioID"];
-  String wellID   = doc["wellID"];
-  String msgType  = doc["msgType"];
-  String msgValue = doc["msgValue"];
+  int radioID           = doc["radioID"];
+  int wellID            = doc["wellID"];
+  WELL_MSG_TYPE msgType = doc["msgType"];
+  int msgValue          = doc["msgValue"];
 
-  wellMSG.Radio_ID  = radioID.toInt();
-  wellMSG.Well_ID   = wellID.toInt();
-  //wellMSG.Msg_Type  = msgType;
-  wellMSG.Msg_Value = msgValue.toInt();
-*/
 
-  // process a message 
-    // reads in the 4 part Well CMD msg
+  wellMSG.Radio_ID  = radioID;
+  wellMSG.Well_ID   = wellID;
+  wellMSG.Msg_Type  = msgType;
+  wellMSG.Msg_Value = msgValue;
 
-  //debugPrintln("processmsg working on " + msg);
-  int temp, ind1, ind2, ind3, ind4;
- 
-  ind1 = msg.indexOf(' ');  //finds location of first ,
-  wellMSG.Radio_ID = msg.substring(0, ind1).toInt();   //captures first data String
-
-  ind2 = msg.indexOf(' ', ind1+1 );   //finds location of second ,
-  wellMSG.Well_ID = msg.substring(ind1+1, ind2+1).toInt();   //captures second data String
-  
-  ind3 = msg.indexOf(' ', ind2+1 );
-  temp = msg.substring(ind2+1, ind3+1).toInt();
-  
-  // look for newline
-  ind4 = msg.indexOf('\n', ind3 );
-  wellMSG.Msg_Value = msg.substring(ind3+1,ind4).toInt(); 
-
-  switch (temp)
-  {
-  case WELL_MSG_TYPE::WMT_STATUS:
-    wellMSG.Msg_Type = WELL_MSG_TYPE::WMT_STATUS;
-    break;
-  case WELL_MSG_TYPE::CMD   :
-    wellMSG.Msg_Type = WELL_MSG_TYPE::CMD;
-    break;
-  case  WELL_MSG_TYPE::WELL_STATE :
-    wellMSG.Msg_Type = WELL_MSG_TYPE::WELL_STATE;
-    break;
-  case WELL_MSG_TYPE::WELL_STATUS  :
-    wellMSG.Msg_Type = WELL_MSG_TYPE::WELL_STATUS;
-    break;
-  case WELL_MSG_TYPE::START_FILL  :
-    wellMSG.Msg_Type = WELL_MSG_TYPE::START_FILL;
-    break;
-  case WELL_MSG_TYPE::STOP_FILL  :
-    wellMSG.Msg_Type = WELL_MSG_TYPE::STOP_FILL;
-    break;
-  case WELL_MSG_TYPE::RESTART_WELL  :
-    wellMSG.Msg_Type = WELL_MSG_TYPE::RESTART_WELL;
-    break;
-  case WELL_MSG_TYPE::WELL_ERRORS  :
-    wellMSG.Msg_Type = WELL_MSG_TYPE::WELL_ERRORS;
-    break;
-  case WELL_MSG_TYPE::HEARTBEAT  :
-    wellMSG.Msg_Type = WELL_MSG_TYPE::HEARTBEAT;
-    break;
-  default:
-    wellMSG.Msg_Type = INVALID_MSG;  // invalid command 
-    wellMSG.Msg_Type = (WELL_MSG_TYPE)temp;        // invalid command 
-    break;
-  }
-
-  // ******************** check to see if this msg is for us
+    // ******************** check to see if this msg is for us
   if(wellMSG.Radio_ID == RELAY_ID) { //   For the RELAY Station
     //debugPrintln("RAW MSG is" + msg);
-    debugPrintln("In Process (MSG) from WELL (" + (String)wellMSG.Well_ID + ")");
-    debugPrintln("Message type was " + printWellMsgType(wellMSG.Msg_Type));
-    String t = (String)wellMSG.Well_ID + " " +
-                   (String)wellMSG.Msg_Type + " " +
-                   (String)wellMSG.Msg_Value ;
-    notifyClients2(t);
+    debugPrintln("In Process (MSG) from WELL (" + (String)wellMSG.Well_ID + ")  " + 
+                 "Message type was " + printWellMsgType(wellMSG.Msg_Type));
 
+    notifyClients();
   }
   else
     debugPrintln("Msg not for the RELAY");
-    
 }
 
 
 // *******************  Web Socket routines
-void notifyClients() {
-  ws.textAll(String(ledState));
-}
+
 
 void serverRequest(void *arg, uint8_t *data, size_t len) {
   //AwsFrameInfo *info = (AwsFrameInfo*)arg;
@@ -286,7 +233,7 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
 
   int reqradioID = doc["radioID"];
   int reqwellID  = doc["wellID"];
-  int reqreqType = doc["requestType"];
+  int reqreqType = doc["msgType"];
   int reqvalue   = doc["msgValue"];
 
   //Serial.println("Request from RELAY");
@@ -295,7 +242,8 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
   //Serial.println("Req type =" + reqreqType);
   //Serial.println("Req value =" + reqvalue);
   
-  sendrequestLORA(reqwellID, reqreqType);  // see what they want to do
+  //sendrequestLORA(reqwellID, reqreqType);  // see what they want to do
+  sendrequestLORA();  // see what they want to do
 }
 
 // recieved data on websocket
@@ -326,7 +274,7 @@ void initWebSocket() {
 }
 
 String processor(const String& var){
-  Serial.println(var);
+  //Serial.println(var);
   if(var == "STATE"){
     if (ledState){
       return "ON";
@@ -561,6 +509,10 @@ void setup(){
   request->send(SPIFFS, "/script.js","text/css");
   });
 
+  server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request){
+  request->send(200,"text/html");
+  });
+
   // Start server
   server.begin();
 
@@ -576,15 +528,11 @@ void loop() {
 
   delay(250);
 
-
-
-  if(receiveflag){
-    debugPrintln("Receive flag true in main loop");
-    // *********** Take care of this packet if it is for this location
-    LoRa.receive();
-    
+  if(receiveflag){  // got a packet in on LORA
+    // debugPrintln("Receive flag true in main loop");
+    LoRa.receive(); 
     processMsg(packet);  // Process/discard the message
-    delay(5);
+    delay(10);
     receiveflag = false;
   }
 
@@ -612,15 +560,3 @@ void loop() {
   }
  
 }
-
-/*
-   if(currentMillis%2 == 0){
-      debugPrintln("Request Heartbeat From Well 3 ....");
-      requestHeartBeat("3");
-      toggle=!toggle;
-    }else{
-      debugPrintln("Request State From Well 3 ........");
-      requestState("3");
-      toggle=!toggle;
-    }  
-*/

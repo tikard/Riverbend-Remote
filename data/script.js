@@ -56,7 +56,7 @@ function sendRequest(wellID, requestType) {
   var obj = new Object();
   obj.radioID = 99;
   obj.wellID = wellID;
-  obj.requestType = requestType;
+  obj.msgType = requestType;
   obj.msgValue = 0;
 
   //convert object to json string
@@ -69,7 +69,7 @@ function sendRequest(wellID, requestType) {
 
 function lastmsgtxt(input, msg) {
   var obj = document.getElementById(input);
-
+  //console.log("msg in " + msg);
   text = "";
   text2 = "";
   const s = msg.split(" ");
@@ -181,17 +181,13 @@ function updateCount() {
 function onMessage(event) {
   console.log(event.data);
   lastcmd = JSON.parse(event.data);
-  lastmsgtxt("lastmsg", lastcmd["radiomsg"]);
-  addtxt("msghistory", lastcmd["radiomsg"]);
+  lastmsgtxt(
+    "lastmsg",
+    lastcmd["wellID"] + " " + lastcmd["msgType"] + " " + lastcmd["msgValue"]
+  );
+  addtxt(
+    "msghistory",
+    lastcmd["wellID"] + " " + lastcmd["msgType"] + " " + lastcmd["msgValue"]
+  );
   updateCount();
-
-  /*
-    var keys = Object.keys(myObj);
-
-    for (var i = 0; i < keys.length; i++){
-        var key = keys[i];
-        document.getElementById(key).innerHTML = myObj[key];
-        document.getElementById("slider"+ (i+1).toString()).value = myObj[key];
-    }
-    */
 }
