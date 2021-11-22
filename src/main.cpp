@@ -51,6 +51,7 @@ bool toggle = false;
 const int RELAY_ID = 99;
 const int WELL_ID = 100;
 const int RADIO_ID = 100;
+const int DISPLAY_WELL_ID = 105;
 
 const long HEARTBEAT_DELAY = 10;  // Heartbeat delay in seconds
 
@@ -94,7 +95,7 @@ String RadioMsgRespone = "";
 
 WELL_ERROR_MSGS well_error = WELL_ERROR_MSGS::ERR_FILL_FAIL; 
 
-StaticJsonDocument<512> doc;
+StaticJsonDocument<256> doc;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -161,14 +162,13 @@ void send(String msg)
 void sendrequestLORA(){  // send out a request to all wells via LORA 
   String requestBody;
 
-  serializeJson(doc, requestBody); 
+  serializeJson(doc, requestBody);   // data is in the doc
   //Serial.println(requestBody);
   send(requestBody); 
 }
 
 
 void notifyClients() {  // tracy
-  StaticJsonDocument<200> doc;
   String requestBody;
     
   doc["radioID"]  = RELAY_ID;          // Add values in the document
@@ -180,12 +180,26 @@ void notifyClients() {  // tracy
 
   //Serial.println("json :" + requestBody);
   ws.textAll(requestBody);
+
+}
+
+void pushtoDisplayUnits(){  // Send out whole msg to Display units which are listening
+  String requestBody = "";
+  doc.clear();
+  doc["radioID"]  = DISPLAY_WELL_ID;          // Add values in the document
+  doc["wellID"]   = wellMSG.Well_ID;   // Add values in the document
+  doc["msgType"]  = wellMSG.Msg_Type;  // Add values in the document
+  doc["msgValue"] = wellMSG.Msg_Value; // Add values in the document
+  serializeJson(doc, requestBody);
+
+  debugPrintln("Echo to Display unit = " + requestBody);
+
 }
 
 
 void processMsg(String msg){  // process a JSON msg from a well station LORA  tracy
 
-  StaticJsonDocument<512> doc;
+  //StaticJsonDocument<512> doc;
   
   doc.clear();
   DeserializationError error = deserializeJson(doc, msg);
@@ -213,6 +227,11 @@ void processMsg(String msg){  // process a JSON msg from a well station LORA  tr
                  "Message type was " + printWellMsgType(wellMSG.Msg_Type));
 
     notifyClients();
+
+    delay(250);  // wait a bit before sending out to Display Units
+
+    pushtoDisplayUnits();
+
   }
   else
     debugPrintln("Msg not for the RELAY");
@@ -231,10 +250,10 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
       return;
     }
 
-  int reqradioID = doc["radioID"];
-  int reqwellID  = doc["wellID"];
-  int reqreqType = doc["msgType"];
-  int reqvalue   = doc["msgValue"];
+  //int reqradioID = doc["radioID"];
+  //int reqwellID  = doc["wellID"];
+  //int reqreqType = doc["msgType"];
+  //int reqvalue   = doc["msgValue"];
 
   //Serial.println("Request from RELAY");
   //Serial.println("Radio ID =" + reqradioID);

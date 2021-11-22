@@ -159,15 +159,16 @@ function lastmsgtxt(input, msg) {
 
 function addtxt(input, msg) {
   var obj = document.getElementById(input);
-  var timestamp = Date.now();
-  console.log(timestamp);
+  //var timestamp = Date.now();
+  //console.log(timestamp);
 
   // Converting it back to human-readable date and time
-  var d = new Date(timestamp);
-  console.log(d);
+  var d = new Date(Date.now());
+  //console.log(d);
 
   obj.value =
-    d.toTimeString().substring(0, 8) + ":    " + msg + "\n" + obj.value;
+    d.toTimeString().substring(0, 7) + ":    " + msg + "\n" + obj.value;
+
   //obj.value+=msg;
   //obj.value+="\n";
 }
@@ -181,6 +182,11 @@ function updateCount() {
 function onMessage(event) {
   console.log(event.data);
   lastcmd = JSON.parse(event.data);
+  var radioID = lastcmd["radioID"];
+  var wellID = lastcmd["wellID"];
+  var msgType = lastcmd["msgType"];
+  var msgValue = lastcmd["msgValue"];
+
   lastmsgtxt(
     "lastmsg",
     lastcmd["wellID"] + " " + lastcmd["msgType"] + " " + lastcmd["msgValue"]
