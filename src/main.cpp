@@ -53,10 +53,23 @@ const int WELL_ID = 100;
 const int RADIO_ID = 100;
 const int DISPLAY_WELL_ID = 105;
 
-const long HEARTBEAT_DELAY = 10;  // Heartbeat delay in seconds
+const long HEARTBEAT_DELAY = 2;  // Heartbeat delay in minutes
 
-long interval1 = 1000 * HEARTBEAT_DELAY;
+long TIMER1 = 60000 * HEARTBEAT_DELAY;
 long previousMillis = 0;        // will store last time LED was updated
+
+const int maxHeartbeatMisses = 4;  // exceed (HEARTBEAT_DELAY)*(maxHeartbeatMisses) minutes
+                                   // this should be greater than the well Heartbeat rate 
+                                   // example well heartbeat 6 mins,  this set to 8  (2*4)
+
+typedef struct
+  {
+      int wellID;
+      int lastMillisCount;
+      int missCount;
+  }  heartbeat_trackin;
+
+heartbeat_trackin heartbeatTracking[RELAY_ID];  // Used to track heartbeats from wells
 
 enum msgType { MT_OK=0, MT_FAULTED=1};
 enum mode { AUTO=0, MANUAL=1}; 
@@ -102,7 +115,7 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
 //*******************  Well Functions
-// Helpers to send output to right port
+// Helpers to send debug output to right port  change serial port in 1 spot
 void debugPrint(String s){ Serial.print(s);}
 void debugPrint(int s){ Serial.print(s);}
 void debugPrintln(String s){ Serial.println(s);}
@@ -163,7 +176,7 @@ void sendrequestLORA(){  // send out a request to all wells via LORA
   String requestBody;
 
   serializeJson(doc, requestBody);   // data is in the doc
-  //Serial.println(requestBody);
+  //debugPrintln(requestBody);
   send(requestBody); 
 }
 
@@ -175,10 +188,11 @@ void notifyClients() {  // tracy
   doc["wellID"]   = wellMSG.Well_ID;   // Add values in the document
   doc["msgType"]  = wellMSG.Msg_Type;  // Add values in the document
   doc["msgValue"] = wellMSG.Msg_Value; // Add values in the document
+  
 
   serializeJson(doc, requestBody);
 
-  //Serial.println("json :" + requestBody);
+  //debugPrintln("json :" + requestBody);
   ws.textAll(requestBody);
 
 }
@@ -196,39 +210,58 @@ void pushtoDisplayUnits(){  // Send out whole msg to Display units which are lis
 
 }
 
+void sendHeartbeatFailure(int wellid){
+  doc.clear();
+  doc["Status"] = String(wellid) + " 1";  // Offline
+  notifyClients();
 
-void processMsg(String msg){  // process a JSON msg from a well station LORA  tracy
+    delay(100);  // wait a bit before sending out to Display Units
 
-  //StaticJsonDocument<512> doc;
-  
+    pushtoDisplayUnits();
+
+}
+
+void processLORAMsg(String msg){  // process a JSON msg from a well station LORA 
   doc.clear();
   DeserializationError error = deserializeJson(doc, msg);
   if (error) {
-    Serial.println(msg);
-    Serial.println(error.c_str()); 
+    debugPrintln("Error decoded JSON msg from wells" + msg);
+    debugPrintln(error.c_str()); 
     return;
   }
 
-  int radioID           = doc["radioID"];
-  int wellID            = doc["wellID"];
-  WELL_MSG_TYPE msgType = doc["msgType"];
-  int msgValue          = doc["msgValue"];
+  wellMSG.Radio_ID  = doc["radioID"];
+  wellMSG.Well_ID   = doc["wellID"];
+  wellMSG.Msg_Type  = doc["msgType"];
+  wellMSG.Msg_Value = doc["msgValue"];
 
-
-  wellMSG.Radio_ID  = radioID;
-  wellMSG.Well_ID   = wellID;
-  wellMSG.Msg_Type  = msgType;
-  wellMSG.Msg_Value = msgValue;
-
-    // ******************** check to see if this msg is for us
-  if(wellMSG.Radio_ID == RELAY_ID) { //   For the RELAY Station
+  if(wellMSG.Radio_ID == RELAY_ID) {   // ******************** check to see if msg is for RELAY Station
     //debugPrintln("RAW MSG is" + msg);
     debugPrintln("In Process (MSG) from WELL (" + (String)wellMSG.Well_ID + ")  " + 
                  "Message type was " + printWellMsgType(wellMSG.Msg_Type));
 
+
+    // Keep Heartbeat signals up to date and send out to clients
+    // Msg from well,  track well heartbeat counts
+    if(wellMSG.Well_ID < RELAY_ID){  
+      
+      heartbeatTracking[wellMSG.Well_ID].wellID = wellMSG.Well_ID;
+
+      // Any message from a WELL reset the miscount and means we have contact with WELL
+      heartbeatTracking[wellMSG.Well_ID].lastMillisCount = wellMSG.Msg_Value;
+      heartbeatTracking[wellMSG.Well_ID].missCount = 0;
+
+      if(heartbeatTracking[wellMSG.Well_ID].missCount > maxHeartbeatMisses){
+        doc["Status"] = String(wellMSG.Well_ID) + " 1";  // Offline
+      }
+      else{
+        doc["Status"] = String(wellMSG.Well_ID) + " 0";  // Online
+      }
+    }
+
     notifyClients();
 
-    delay(250);  // wait a bit before sending out to Display Units
+    delay(100);  // wait a bit before sending out to Display Units
 
     pushtoDisplayUnits();
 
@@ -246,7 +279,7 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
 
   DeserializationError error = deserializeJson(doc, data);
   if (error) {
-      Serial.println(error.c_str()); 
+      debugPrintln(error.c_str()); 
       return;
     }
 
@@ -255,11 +288,11 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
   //int reqreqType = doc["msgType"];
   //int reqvalue   = doc["msgValue"];
 
-  //Serial.println("Request from RELAY");
-  //Serial.println("Radio ID =" + reqradioID);
-  //Serial.println("Well ID =" + reqwellID);
-  //Serial.println("Req type =" + reqreqType);
-  //Serial.println("Req value =" + reqvalue);
+  //debugPrintln("Request from RELAY");
+  //debugPrintln("Radio ID =" + reqradioID);
+  //debugPrintln("Well ID =" + reqwellID);
+  //debugPrintln("Req type =" + reqreqType);
+  //debugPrintln("Req value =" + reqvalue);
   
   //sendrequestLORA(reqwellID, reqreqType);  // see what they want to do
   sendrequestLORA();  // see what they want to do
@@ -269,7 +302,7 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
 void wsDataEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
              void *arg, uint8_t *data, size_t len) {
 
-  //Serial.println("Got Websocket request");
+  //debugPrintln("Got Websocket request");
   switch (type) {
     case WS_EVT_CONNECT:
       Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
@@ -278,7 +311,7 @@ void wsDataEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventT
       Serial.printf("WebSocket client #%u disconnected\n", client->id());
       break;
     case WS_EVT_DATA:
-      //Serial.println("Data on WEBSOCKET")  ;
+      //debugPrintln("Data on WEBSOCKET")  ;
       serverRequest(arg, data, len);     
       break;
     case WS_EVT_PONG:
@@ -293,7 +326,7 @@ void initWebSocket() {
 }
 
 String processor(const String& var){
-  //Serial.println(var);
+  //debugPrintln(var);
   if(var == "STATE"){
     if (ledState){
       return "ON";
@@ -434,7 +467,7 @@ void displaySendReceive()
   Heltec.display -> clear();
 }
 
-void onReceive(int packetSize)//LoRa receiver interrupt service
+void onLORAReceive(int packetSize)//LoRa receiver interrupt service
 {
   //if (packetSize == 0) return;
   packet = "";
@@ -456,11 +489,16 @@ void onReceive(int packetSize)//LoRa receiver interrupt service
   receiveflag = true;    
 }
 
-// ****************************   1 Time SETUP 
-void setup(){
-  wellMSG.Radio_ID = 5;
-  wellMSG.Well_ID = 2;
-  wellMSG.Msg_Type = WELL_MSG_TYPE::WMT_STATUS;
+
+void setup(){  // ****************************   1 Time SETUP 
+
+  for (int i = 0; i < RELAY_ID-1; i++)  // reset tracking values
+  {
+    heartbeatTracking[i].wellID =-1;
+    heartbeatTracking[i].lastMillisCount = -1;
+    heartbeatTracking[i].missCount = 0;
+  }
+  
 
 	Heltec.begin(true /*DisplayEnable Enable*/, true /*LoRa Enable*/, true /*Serial Enable*/, true /*LoRa use PABOOST*/, BAND /*LoRa RF working band*/);
 
@@ -482,19 +520,19 @@ void setup(){
 
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
-  Serial.println(IP);
+  debugPrintln(IP);
   */
 
   // Mount up SPIFF for use
   if(!SPIFFS.begin(true)){
-    Serial.println("An Error has occurred while mounting SPIFFS");
+    debugPrintln("An Error has occurred while mounting SPIFFS");
     return;
   }
   server.begin();
 
 	//WIFIScan(1);
 
-  Serial.println(WiFi.localIP());
+  debugPrintln(WiFi.localIP());
 
 
 	chipid=ESP.getEfuseMac();//The chip ID is essentially its MAC address(length: 6 bytes).
@@ -503,7 +541,7 @@ void setup(){
 
   attachInterrupt(0,interrupt_GPIO0,FALLING);
   
-	LoRa.onReceive(onReceive);
+	LoRa.onReceive(onLORAReceive);
 
   LoRa.receive();
   displaySendReceive();
@@ -550,32 +588,44 @@ void loop() {
   if(receiveflag){  // got a packet in on LORA
     // debugPrintln("Receive flag true in main loop");
     LoRa.receive(); 
-    processMsg(packet);  // Process/discard the message
-    delay(10);
+    processLORAMsg(packet);  // Process/discard the message
+    delay(100);
     receiveflag = false;
   }
 
  
-  if(long(currentMillis - previousMillis) > interval1) {
-    // save the last time you blinked the LED 
-    previousMillis = currentMillis;   
+  if(long(currentMillis - previousMillis) > TIMER1) {
+    previousMillis = currentMillis; 
+
+    for (int i = 0; i < RELAY_ID-1; i++)  // loop over all wells
+    { 
+      if(heartbeatTracking[i].wellID != -1){
+        heartbeatTracking[i].missCount++;  // update the miss counts for all wells
+
+        if(heartbeatTracking[i].missCount > maxHeartbeatMisses){
+          debugPrint("Well " );
+          debugPrint(heartbeatTracking[i].wellID);
+          debugPrintln(" has exceeded expected HEARTBEAT last seen time" );
+          sendHeartbeatFailure(heartbeatTracking[i].wellID);
+        }
+        else{
+          debugPrint("Well " );
+          debugPrint(heartbeatTracking[i].wellID);
+          debugPrint(" count ");
+          debugPrintln(heartbeatTracking[i].missCount);
+        }
+
+      }
+    }
+      
   
-    //digitalWrite(25,HIGH);
     displaySendReceive();
-
-
-   if(currentMillis%2 == 0){
-      //debugPrintln("Request Heartbeat From Well 3 ....");
-      //requestHeartBeat("3");
-      toggle=!toggle;
-    }else{
-      //debugPrintln("Request State From Well 3 ........");
-      //requestState("3");
-      toggle=!toggle;
-    }  
 
     LoRa.receive();  // gotta have this in loop to make sure to LISTEN
     //displaySendReceive();
   }
+
+
+  LoRa.receive();  // gotta have this in loop to make sure to LISTEN
  
 }

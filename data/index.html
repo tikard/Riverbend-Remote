@@ -52,20 +52,50 @@
                         onclick="cmdbuttonpressed('6')"><br>
                 </p>
             </div>
-
         </div>
-
-        <p>Last Message Received<br>
-            <textarea class="lastmsg" id="lastmsg" name="lastmsg" rows="1" cols="40"></textarea>
-        </p>
-
-        <p>MESSAGE HISTORY (All Messages from Wells)<br>
-            <textarea class="msghistory" id="msghistory" name="msghistory" rows="15" cols="40" resize="none"></textarea>
-        
-            <input class="button" type="button" id="ClrHistory" value="Clear History" width="100%"
-                onclick="clearHistory()">
-        
-        </p>
+        <br>
+        <table>
+            <theah>
+                <tr>
+                    <th class="msgs"></th>
+                    <th class="wells"></th>
+                </tr>
+            </theah>
+            <body>
+                <tr>
+                    <td>           
+                        Last Message Received<br>
+                            <textarea class="lastmsg" id="lastmsg" name="lastmsg" rows="1" cols="40"></textarea>
+                        <br>
+            
+                        <br>MESSAGE HISTORY (All Messages from Wells)<br>
+                            <textarea class="msghistory" id="msghistory" name="msghistory" rows="15" cols="40" resize="none"></textarea>
+                        
+                            <input class="button" type="button" id="ClrHistory" value="Clear History" width="100%"
+                                onclick="clearHistory()">
+                    </td>
+                    <td> 
+                        <table class="table2" id="status">
+                            <thead>WELL STATES
+                                <tr>
+                                    <th class="wellstatus"></th>
+                                </tr>
+                            </thead>
+                            <tr><td id="Well1">Well 1  OFFLINE</td></tr>
+                            <tr><td id="Well2">Well 2  OFFLINE</td></tr>
+                            <tr><td id="Well3">Well 3  OFFLINE</td></tr>
+                            <tr><td id="Well4">Well 4  OFFLINE</td></tr>
+                            <tr><td id="Well5">Well 5  OFFLINE</td></tr>
+                            <tr><td id="Well6">Well 6  OFFLINE</td></tr>
+                            <tr><td id="Well7">Well 7  OFFLINE</td></tr>
+                            <tr><td id="Well8">Well 8  OFFLINE</td></tr>
+                            <tr><td id="Well9">Well 9  OFFLINE</td></tr>
+                           <tr><td id="Well10">Well 10 OFFLINE</td></tr>
+                        </table>
+                    </td>
+                </tr>
+            </body>
+        </table>
     </div>
     <script src="script.js"></script>
 </body>

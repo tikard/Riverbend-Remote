@@ -7,7 +7,11 @@ html {
   }
   h1 {
     font-size: 1.2rem;
+    font-weight: bold;
     color: white;
+  }
+  h2 {
+    font-size: 1.1rem;
   }
   p {
     font-size: 1.4rem;
@@ -24,10 +28,12 @@ html {
   }
 
   .card-grid {
-    max-width: 1000px;
+    /*max-width: 1000px; */
+    max-width: 90%;
     margin: 0 auto;
     display: grid;
-    grid-gap: 2rem;
+    /*grid-gap: 2rem; */
+    gap: '5px';
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   }
 
@@ -44,20 +50,20 @@ html {
   
 
   .lastmsg {
-    width: 60%;
+    width: 85%;
     height: 20px;
     padding: 10px;
     outline: 0;
     border: 3px solid #1c87c9;
     background: #f4f5f4;
     line-height: 20px;
-    font-size: x-large;
+    font-size: large;
     resize: none;
     text-align: center;
   }
 
   .msghistory {
-    width: 60%;
+    width: 85%;
     height: 200px;
     padding: 10px;
     outline: 0;
@@ -109,5 +115,34 @@ html {
 
   .welldropdown{
     width: 60%;
+  }
+
+
+  table {
+    width: 100%;
+    /*border: 1px solid #000; */
+    border: none; 
+  }
+  th.msgs {
+    width: 70%;
+  }
+  th.wells {
+    width: 30%; /* Not necessary, since only 70% width remains */
+  }
+  th.wellstatus{
+    width: 100%; /* Not necessary, since only 70% width remains */ 
+  }
+
+
+  .table2 {
+    width: 90%;
+    /*border: 1px solid #000; */
+    /*border: 1px solid #000;*/ 
+    border: 3px solid #1c87c9;
+    background: #f4f5f4;
+  }
+  .wellstatus{
+    border: none solid #1c87c9;
+    background: #f4f5f4;
   }
 
