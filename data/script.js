@@ -126,18 +126,23 @@ function lastmsgtxt(input, msg) {
       break;
     case "7":
       text = " (ERRORS)";
+      w = "Well" + s[0];
       switch (s[2]) {
         case "0":
           text2 = " START FAILURE";
+          document.getElementById(w).style.backgroundColor = "yellow";
           break;
         case "1":
           text2 = " POWER FAIL ON FILL";
+          document.getElementById(w).style.backgroundColor = "yellow";
           break;
         case "2":
           text2 = " FILL TIME EXCEEDED";
+          document.getElementById(w).style.backgroundColor = "yellow";
           break;
         case "3":
           text2 = " STOP ERROR";
+          document.getElementById(w).style.backgroundColor = "yellow";
           break;
         case "4":
           text2 = " NO ERRORS";
@@ -291,6 +296,8 @@ function onMessage(event) {
   var msgValue = lastcmd["msgValue"];
   var Status = lastcmd["Status"];
 
+  updateHeartbeatStatus(Status);
+
   lastmsgtxt(
     "lastmsg",
     lastcmd["wellID"] + " " + lastcmd["msgType"] + " " + lastcmd["msgValue"]
@@ -302,8 +309,6 @@ function onMessage(event) {
   );
 
   updateCount();
-
-  updateHeartbeatStatus(Status);
 
   //addtxt("msghistory", "*** WELL3 is ONLINE ***");
 }

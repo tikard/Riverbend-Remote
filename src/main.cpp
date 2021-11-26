@@ -19,6 +19,10 @@
 #include "images.h"
 #include "SPIFFS.h"
 #include "ArduinoJson-v6.18.5.h"
+//#include "SPI.h"
+//#include "FS.h"
+//#include "SD.h"
+
 
 
 #define BAND    915E6  //you can set band here directly,e.g. 868E6,915E6
@@ -347,7 +351,7 @@ void WIFISetUp(void)
 	delay(100);
 	WiFi.mode(WIFI_STA);
 	WiFi.setAutoConnect(true);
-	WiFi.begin("Firehole2-2G","cad123dis");//fill in "Your WiFi SSID","Your Password"
+	WiFi.begin("firehole","cad123dis");//fill in "Your WiFi SSID","Your Password"
 	delay(100);
 
 	byte count = 0;
@@ -489,8 +493,26 @@ void onLORAReceive(int packetSize)//LoRa receiver interrupt service
   receiveflag = true;    
 }
 
+void writeFile(fs::FS &fs, const char * path, const char * message){
+    Serial.printf("Writing file: %s\n", path);
+
+    File file = fs.open(path, FILE_WRITE);
+    if(!file){
+        Serial.println("Failed to open file for writing");
+        return;
+    }
+    if(file.print(message)){
+        Serial.println("File written");
+    } else {
+        Serial.println("Write failed");
+    }
+    file.close();
+}
+
 
 void setup(){  // ****************************   1 Time SETUP 
+
+  //Serial.begin(115200);
 
   for (int i = 0; i < RELAY_ID-1; i++)  // reset tracking values
   {
@@ -499,8 +521,15 @@ void setup(){  // ****************************   1 Time SETUP
     heartbeatTracking[i].missCount = 0;
   }
   
+ 
 
 	Heltec.begin(true /*DisplayEnable Enable*/, true /*LoRa Enable*/, true /*Serial Enable*/, true /*LoRa use PABOOST*/, BAND /*LoRa RF working band*/);
+
+
+  //SPI.begin(17, 13, 23, 22);
+  //SD.begin(22,SPI);
+
+  // writeFile(SD, "/hello.txt", "Hello ");
 
 	logo();
 	delay(300);
