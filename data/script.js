@@ -12,11 +12,13 @@ function onload(event) {
 
 function getValues() {
   //websocket.send("getValues");
+  setInterval(WebSocketkeepalive, 15000);
 }
 
 function initWebSocket() {
   console.log("Trying to open a WebSocket connection…");
   websocket = new WebSocket(gateway);
+
   websocket.onopen = onOpen;
   websocket.onclose = onClose;
   websocket.onmessage = onMessage;
@@ -51,6 +53,16 @@ function clearHistory() {
   msgcounter = 0;
 }
 
+function WebSocketkeepalive() {
+  var obj = new Object();
+  obj.keepalive = "1";
+
+  var keepaliveRequest = JSON.stringify(obj);
+
+  console.log(JSON.parse(keepaliveRequest)); // Request in JSON
+  websocket.send(keepaliveRequest);
+}
+
 function sendRequest(wellID, requestType) {
   // Put this in JSON format and send to server
   var obj = new Object();
@@ -79,6 +91,7 @@ function lastmsgtxt(input, msg) {
       switch (s[2]) {
         case "0":
           text2 = " IDLE";
+          document.getElementById(w).style.backgroundColor = "greenyellow";
           break;
         case "1":
           text2 = " START";
@@ -279,8 +292,10 @@ function updateHeartbeatStatus(msg) {
   const s = msg.split(" ");
   if (s[1] == "0") {
     w = "Well" + s[0];
-    document.getElementById(w).innerHTML = "Well " + s[0] + "  ONLINE";
-    document.getElementById(w).style.backgroundColor = "greenyellow";
+    if (document.getElementById(w).style.backgroundColor != "yellow") {
+      document.getElementById(w).innerHTML = "Well " + s[0] + "  ONLINE";
+      document.getElementById(w).style.backgroundColor = "greenyellow";
+    }
   } else {
     document.getElementById(w).innerHTML = "Well " + s[0] + "  OFFLINE";
     document.getElementById(w).style.backgroundColor = "Red";

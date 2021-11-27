@@ -225,6 +225,29 @@ void sendHeartbeatFailure(int wellid){
 
 }
 
+void writeLogMessage(String msg){
+    File file = SPIFFS.open("/relaylog.txt", FILE_APPEND);
+ 
+  if (!file) {
+    Serial.println("Error opening logMessage for writing");
+    return;
+  }
+ 
+  int bytesWritten = file.println(msg);
+ 
+  if (bytesWritten > 0) {
+    Serial.println("logMessage was written");
+    Serial.println(bytesWritten);
+ 
+  } else {
+    Serial.println("logMessage write failed");
+  }
+ 
+  file.close();
+ 
+}
+
+
 void processLORAMsg(String msg){  // process a JSON msg from a well station LORA 
   doc.clear();
   DeserializationError error = deserializeJson(doc, msg);
@@ -269,6 +292,8 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
 
     pushtoDisplayUnits();
 
+    writeLogMessage(msg);
+
   }
   else
     debugPrintln("Msg not for the RELAY");
@@ -298,8 +323,13 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
   //debugPrintln("Req type =" + reqreqType);
   //debugPrintln("Req value =" + reqvalue);
   
-  //sendrequestLORA(reqwellID, reqreqType);  // see what they want to do
-  sendrequestLORA();  // see what they want to do
+  const char* keepalive = doc["keepalive"];
+  if (keepalive) {
+    return;
+  }
+  else{
+    sendrequestLORA();  // see what they want to do
+  }
 }
 
 // recieved data on websocket
@@ -539,18 +569,18 @@ void setup(){  // ****************************   1 Time SETUP
 	WiFi.mode(WIFI_MODE_STA);  // uncomment this to go back to station mode
 	delay(100);
 
-  /*
-  //Connect to Wi-Fi network with SSID and password
-  Serial.print("Setting AP (Access Point)…");
-  // Remove the password parameter, if you want the AP (Access Point) to be open
-  WiFi.softAP("Welltest");
   
-
-
+  //Connect to Wi-Fi network with SSID and password
+  //Serial.print("Setting AP (Access Point)…");
+  // Remove the password parameter, if you want the AP (Access Point) to be open
+  //WiFi.softAP("Welltest","cad123dis");
+  
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
-  debugPrintln(IP);
-  */
+  Serial.println(IP);
+
+  //WIFIScan(1);
+  
 
   // Mount up SPIFF for use
   if(!SPIFFS.begin(true)){
@@ -559,7 +589,7 @@ void setup(){  // ****************************   1 Time SETUP
   }
   server.begin();
 
-	//WIFIScan(1);
+
 
   debugPrintln(WiFi.localIP());
 
@@ -574,9 +604,6 @@ void setup(){  // ****************************   1 Time SETUP
 
   LoRa.receive();
   displaySendReceive();
-
-  
-  
 
   // Route for root / web page
   //server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -596,8 +623,13 @@ void setup(){  // ****************************   1 Time SETUP
   });
 
   server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request){
-  request->send(200,"text/html");
+  request->send(200,"text/html"); 
   });
+
+  server.on("/relaylog.txt", HTTP_GET, [](AsyncWebServerRequest *request){
+  request->send(SPIFFS, "/relaylog.txt","text/css");
+  });
+
 
   // Start server
   server.begin();
@@ -609,10 +641,12 @@ void setup(){  // ****************************   1 Time SETUP
 void loop() {
   currentMillis = millis();  // used in testing for a regular interval test
 
-  ws.cleanupClients();
-  digitalWrite(ledPin, ledState);
+  //ws.cleanupClients();
+  //digitalWrite(ledPin, ledState);
 
   delay(250);
+  if(LoRa.available())
+    LoRa.receive();
 
   if(receiveflag){  // got a packet in on LORA
     // debugPrintln("Receive flag true in main loop");
