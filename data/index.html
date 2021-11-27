@@ -1,103 +1,81 @@
-<!-- Complete project details: https://randomnerdtutorials.com/esp8266-nodemcu-web-server-websocket-sliders/ -->
-
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <title>Riverbend Relay/Contol</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta charset="UTF-8">
+	<title>Riverbend Relay/Contol</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" type="text/css" href="style.css">
-</head>
 
+</head>
 <body>
-    <div class="topnav">
-        <h1>Riverbend Relay/Contol Panel</h1>
+	<div class="container">
+		<div class="header grid-view">Select Well ID and Press Request Type/Command to send MSG to WELL</div>
+		<div class="content-small grid-view">Well ID
+      <p <form>
+      <select class="welldropdown" name="welldropdown" id="wellID">
+          <option value="1" selected>Well 1</option>
+          <option value="2">Well 2</option>
+          <option value="3">Well 3</option>
+      </select>
+      </form>
+      </p>
     </div>
-    <div class="content">
+		<div class="content-small">Request Type
+      <p>
+          <input class="button" type="button" id="state" value="STATE " onclick="buttonpressed('2')"><br>
+          <input class="button" type="button" id="status" value="STATUS"
+              onclick="buttonpressed('3')"><br>
+          <input class="button" type="button" id="Errors" value="ERRORS"
+              onclick="buttonpressed('7')"><br>
+          <input class="button" type="button" id="Heartbeat" value="HEARTBEAT"
+              onclick="buttonpressed('8')">
+      </p>
+    </div>
+
+      <div class="content-small">Command
         <p>
-        <h2>Select Well ID and Press Request Type/Command to send MSG to WELL</h2>
-        </p>
-        <div class="card-grid">
-            <div class="card">
-                <p class="card-title"> Well ID</p>
-                <p <form>
-                    <select class="welldropdown" name="welldropdown" id="wellID">
-                        <option value="1" selected>Well 1</option>
-                        <option value="2">Well 2</option>
-                        <option value="3">Well 3</option>
-                    </select>
-                    </form>
-                </p>
-            </div>
-            <div class="card">
-                <p class="card-title">Request Type</p>
-                <p>
-                    <input class="button" type="button" id="state" value="STATE" onclick="buttonpressed('2')"><br>
-                    <input class="button" type="button" id="status" value="STATUS"
-                        onclick="buttonpressed('3')"><br>
-                    <input class="button" type="button" id="Errors" value="ERRORS"
-                        onclick="buttonpressed('7')"><br>
-                    <input class="button" type="button" id="Heartbeat" value="HEARTBEAT"
-                        onclick="buttonpressed('8')">
-                </p>
-            </div>
-            <div class="card">
-                <p class="card-title">Command</p>
-                <p>
-                    <input class="button" type="button" id="cmdFill" value="Start Fill"
-                        onclick="cmdbuttonpressed('4')"><br>
-                    <input class="button" type="button" id="cmdStopFill" value="Stop Fill"
-                        onclick="cmdbuttonpressed('5')"><br>
-                    <input class="button" type="button" id="cmdRestart" value="Restart Well"
-                        onclick="cmdbuttonpressed('6')"><br>
-                </p>
-            </div>
-        </div>
-        <br>
-        <table>
-            <theah>
-                <tr>
-                    <th class="msgs"></th>
-                    <th class="wells"></th>
-                </tr>
-            </theah>
-            <body>
-                <tr>
-                    <td>           
-                        Last Message Received<br>
-                            <textarea class="lastmsg" id="lastmsg" name="lastmsg" rows="1" cols="40"></textarea>
-                        <br>
-            
-                        <br>MESSAGE HISTORY (All Messages from Wells)<br>
-                            <textarea class="msghistory" id="msghistory" name="msghistory" rows="15" cols="40" resize="none"></textarea>
-                        
-                            <input class="button" type="button" id="ClrHistory" value="Clear History" width="100%"
-                                onclick="clearHistory()">
-                    </td>
-                    <td> 
-                        <table class="table2" id="status">
-                            <thead>WELL STATES
-                                <tr>
-                                    <th class="wellstatus"></th>
-                                </tr>
-                            </thead>
-                            <tr><td id="Well1">Well 1  OFFLINE</td></tr>
-                            <tr><td id="Well2">Well 2  OFFLINE</td></tr>
-                            <tr><td id="Well3">Well 3  OFFLINE</td></tr>
-                            <tr><td id="Well4">Well 4  OFFLINE</td></tr>
-                            <tr><td id="Well5">Well 5  OFFLINE</td></tr>
-                            <tr><td id="Well6">Well 6  OFFLINE</td></tr>
-                            <tr><td id="Well7">Well 7  OFFLINE</td></tr>
-                            <tr><td id="Well8">Well 8  OFFLINE</td></tr>
-                            <tr><td id="Well9">Well 9  OFFLINE</td></tr>
-                           <tr><td id="Well10">Well 10 OFFLINE</td></tr>
-                        </table>
-                    </td>
-                </tr>
-            </body>
-        </table>
+            <input class="button" type="button" id="cmdFill" value="Start Fill"
+                onclick="cmdbuttonpressed('4')"><br>
+            <input class="button" type="button" id="cmdStopFill" value="Stop Fill"
+                onclick="cmdbuttonpressed('5')"><br>
+            <input class="button" type="button" id="cmdRestart" value="Restart Well"
+                onclick="cmdbuttonpressed('6')"><br>
+        </p></div>
+      <div class="content-lastmsg">Last Message Received
+        <textarea class="lastmsg" id="lastmsg" name="lastmsg" rows="1" cols="40"></textarea>
+        
+      </div>
+
+
+    <div class="content-history"><hr>MESSAGE HISTORY (All Messages from Wells)<br>
+      <textarea class="msghistory" id="msghistory" name="msghistory" rows="15" cols="40" resize="none"></textarea><hr>
+      <input class="button" type="button" id="ClrHistory" value="Clear History" width="100%"
+      onclick="clearHistory()">
     </div>
+
+    <div><table class="table2" id="status"><hr>
+      <thead>WELL STATES
+          <tr>
+              <th class="wellstatus"></th>
+          </tr>
+      </thead>
+      <tr><td id="Well1">Well 1  OFFLINE</td></tr>
+      <tr><td id="Well2">Well 2  OFFLINE</td></tr>
+      <tr><td id="Well3">Well 3  OFFLINE</td></tr>
+      <tr><td id="Well4">Well 4  OFFLINE</td></tr>
+      <tr><td id="Well5">Well 5  OFFLINE</td></tr>
+      <tr><td id="Well6">Well 6  OFFLINE</td></tr>
+      <tr><td id="Well7">Well 7  OFFLINE</td></tr>
+      <tr><td id="Well8">Well 8  OFFLINE</td></tr>
+      <tr><td id="Well9">Well 9  OFFLINE</td></tr>
+      <tr><td id="Well10">Well 10 OFFLINE</td></tr>
+      <tr><td id="Well11">Well 11 OFFLINE</td></tr>
+      <tr><td id="Well12">Well 12 OFFLINE</td></tr>
+      <tr><td id="Well13">Well 13 OFFLINE</td></tr>
+      <tr><td id="Well14">Well 14 OFFLINE</td></tr>
+      <tr><td id="Well15">Well 15 OFFLINE</td></tr>
+      </table><hr></div>
+	</div>
     <script src="script.js"></script>
 </body>
-
 </html>
