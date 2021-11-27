@@ -56,10 +56,8 @@ function clearHistory() {
 function WebSocketkeepalive() {
   var obj = new Object();
   obj.keepalive = "1";
-
   var keepaliveRequest = JSON.stringify(obj);
-
-  console.log(JSON.parse(keepaliveRequest)); // Request in JSON
+  //console.log(JSON.parse(keepaliveRequest)); // Request in JSON
   websocket.send(keepaliveRequest);
 }
 
@@ -310,6 +308,12 @@ function onMessage(event) {
   var msgType = lastcmd["msgType"];
   var msgValue = lastcmd["msgValue"];
   var Status = lastcmd["Status"];
+  var keepalivemsg = lastcmd["keepalive"];
+
+  if (keepalivemsg) {
+    console.log("Got a keep alive from server");
+    return;
+  }
 
   updateHeartbeatStatus(Status);
 

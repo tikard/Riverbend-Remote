@@ -19,12 +19,13 @@
 #include "images.h"
 #include "SPIFFS.h"
 #include "ArduinoJson-v6.18.5.h"
-//#include "SPI.h"
-//#include "FS.h"
-//#include "SD.h"
+#include "SPI.h"
+#include "FS.h"
+#include "SD.h"
 
+SPIClass spi1;
 
-
+#define RELAYLOGFILENAME "/relaylog.txt"
 #define BAND    915E6  //you can set band here directly,e.g. 868E6,915E6
 
 String rssi = "RSSI --";
@@ -59,8 +60,10 @@ const int DISPLAY_WELL_ID = 105;
 
 const long HEARTBEAT_DELAY = 2;  // Heartbeat delay in minutes
 
+long keepaliveTimer = 25000;
 long TIMER1 = 60000 * HEARTBEAT_DELAY;
-long previousMillis = 0;        // will store last time LED was updated
+long previousMillis = 0;         // Used in peridic timers in main loop
+long previousMillis2 = 0;        // Used in peridic timers in main loop
 
 const int maxHeartbeatMisses = 4;  // exceed (HEARTBEAT_DELAY)*(maxHeartbeatMisses) minutes
                                    // this should be greater than the well Heartbeat rate 
@@ -184,6 +187,17 @@ void sendrequestLORA(){  // send out a request to all wells via LORA
   send(requestBody); 
 }
 
+void sendKeepAlive(){
+  String keepaliveBody;
+  doc.clear();
+  doc["keepalive"] =  1;
+  serializeJson(doc, keepaliveBody);
+  //Serial.println("Sending out keepalive msg via websocket");
+  //Serial.println(keepaliveBody);
+  ws.textAll(keepaliveBody);
+  doc.clear();
+}
+
 
 void notifyClients() {  // tracy
   String requestBody;
@@ -225,26 +239,39 @@ void sendHeartbeatFailure(int wellid){
 
 }
 
-void writeLogMessage(String msg){
-    File file = SPIFFS.open("/relaylog.txt", FILE_APPEND);
- 
-  if (!file) {
-    Serial.println("Error opening logMessage for writing");
-    return;
+//void appendFile(fs::FS &fs, const char * path, const char * message){
+void appendFile(fs::FS &fs, const char * path, String message){
+    Serial.printf("Appending to file: %s\n", path);
+
+    File file = fs.open(path, FILE_APPEND);
+    if(!file){
+        Serial.println("Failed to open file for appending");
+        return;
+    }
+    if(file.println(message)){
+        //Serial.println("Message appended");
+    } else {
+        //Serial.println("Append failed");
+    }
+    file.close();
+}
+
+
+void writeLogMessage(String msg){  // appends msg to the log file
+  //appendFile(SD, RELAYLOGFILENAME, msg);  
+
+  File file = SD.open(RELAYLOGFILENAME, FILE_APPEND);
+  if(!file){
+      Serial.println("Failed to open file for appending");
+      return;
   }
- 
-  int bytesWritten = file.println(msg);
- 
-  if (bytesWritten > 0) {
-    Serial.println("logMessage was written");
-    Serial.println(bytesWritten);
- 
+  if(file.println(msg)){
+      Serial.println("Message appended");
   } else {
-    Serial.println("logMessage write failed");
+      Serial.println("Append failed");
   }
- 
   file.close();
- 
+
 }
 
 
@@ -555,14 +582,34 @@ void setup(){  // ****************************   1 Time SETUP
 
 	Heltec.begin(true /*DisplayEnable Enable*/, true /*LoRa Enable*/, true /*Serial Enable*/, true /*LoRa use PABOOST*/, BAND /*LoRa RF working band*/);
 
+  SPIClass(1);
+  spi1.begin(17, 13, 23, 22);
 
-  //SPI.begin(17, 13, 23, 22);
-  //SD.begin(22,SPI);
+  if(!SD.begin(22, spi1)){
+      Serial.println("Card Mount Failed");
+      return;
+  }
+  uint8_t cardType = SD.cardType();
 
-  // writeFile(SD, "/hello.txt", "Hello ");
+  if(cardType == CARD_NONE){
+      Serial.println("No SD card attached");
+      return;
+  }
+
+  Serial.print("SD Card Type: ");
+  if(cardType == CARD_MMC){
+      Serial.println("MMC");
+  } else if(cardType == CARD_SD){
+      Serial.println("SDSC");
+  } else if(cardType == CARD_SDHC){
+      Serial.println("SDHC");
+  } else {
+      Serial.println("UNKNOWN");
+  }
+
 
 	logo();
-	delay(300);
+	delay(500);
 	Heltec.display -> clear();
 
 	WIFISetUp();  // uncomment this to go back to station mode
@@ -644,7 +691,8 @@ void loop() {
   //ws.cleanupClients();
   //digitalWrite(ledPin, ledState);
 
-  delay(250);
+  delay(200);
+
   if(LoRa.available())
     LoRa.receive();
 
@@ -657,7 +705,7 @@ void loop() {
   }
 
  
-  if(long(currentMillis - previousMillis) > TIMER1) {
+  if(long(currentMillis - previousMillis) > TIMER1) {  // Periodic tasks
     previousMillis = currentMillis; 
 
     for (int i = 0; i < RELAY_ID-1; i++)  // loop over all wells
@@ -672,23 +720,28 @@ void loop() {
           sendHeartbeatFailure(heartbeatTracking[i].wellID);
         }
         else{
-          debugPrint("Well " );
-          debugPrint(heartbeatTracking[i].wellID);
-          debugPrint(" count ");
-          debugPrintln(heartbeatTracking[i].missCount);
+          //debugPrint("Well " );
+          //debugPrint(heartbeatTracking[i].wellID);
+          //debugPrint(" count ");
+          //debugPrintln(heartbeatTracking[i].missCount);
         }
 
       }
     }
-      
-  
+        
     displaySendReceive();
 
     LoRa.receive();  // gotta have this in loop to make sure to LISTEN
-    //displaySendReceive();
+
+  }
+
+  if(long(currentMillis - previousMillis2) > keepaliveTimer) {  // Periodic tasks
+    previousMillis2 = currentMillis; 
+    sendKeepAlive();
   }
 
 
-  LoRa.receive();  // gotta have this in loop to make sure to LISTEN
+  if(LoRa.available())
+    LoRa.receive();  // gotta have this in loop to make sure to LISTEN
  
 }
