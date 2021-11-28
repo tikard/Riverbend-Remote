@@ -6,6 +6,12 @@
 
   Initial commit to Github
   Version 0.1  Full working version thru Well_Receiver to Riverbend Well Unit  11/19/21
+  version 0.2  Full working with added Display Unit which sends well commands thru RELAY  11/28/21
+
+
+
+  Note:   Jumper Pin 39 High = RELAY STATION MODE or  Low = DiSPLAY STATION MODE
+          Jumper Pin 38 HIGH = WiFi Station       or  Low = WiFi Access Point (WellDisplay SSID No PW)
 
 
 *********/
@@ -19,10 +25,31 @@
 #include "images.h"
 #include "SPIFFS.h"
 #include "ArduinoJson-v6.18.5.h"
+#include <stdio.h>
+#include <stdlib.h>
+//#include <sqlite3.h>
 #include "SPI.h"
+//#include "RTClib.h"
 #include "FS.h"
 #include "SD.h"
 
+
+boolean RELAYROLE       = true;   // false is DISPLAY mode
+boolean WIFIMODESTATION = true;   // false is DISPLAY mode
+
+const int RELAY_ID = 99;
+const int RELAY_RADIO_ID = 99;
+const int RELAY_WELL_ID = 99;
+const int DISPLAY_RADIO_ID = 100;
+const int WEB_RADIO_ID = 101;
+
+#define ROLE_GPIO 39
+#define WIFI_GPIO 38
+
+#define ONLINE  0
+#define OFFLINE 1
+
+//RTC_DS1307 rtc;  // Real Time Clock
 SPIClass spi1;
 
 #define RELAYLOGFILENAME "/relaylog.txt"
@@ -53,10 +80,8 @@ unsigned long currentMillis;
 bool toggle = false;
 
 //************************************ Well Stuff **************************************************  
-const int RELAY_ID = 99;
-const int WELL_ID = 100;
-const int RADIO_ID = 100;
-const int DISPLAY_WELL_ID = 105;
+
+
 
 const long HEARTBEAT_DELAY = 2;  // Heartbeat delay in minutes
 
@@ -121,6 +146,49 @@ StaticJsonDocument<256> doc;
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
+
+// ******************  SQLite Routines
+/*
+const char* data = "Callback function called";
+static int callback(void *data, int argc, char **argv, char **azColName){
+   int i;
+   Serial.printf("%s: ", (const char*)data);
+   for (i = 0; i<argc; i++){
+       Serial.printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+   }
+   Serial.printf("\n");
+   return 0;
+}
+
+int openDb(const char *filename, sqlite3 **db) {
+   int rc = sqlite3_open(filename, db);
+   if (rc) {
+       Serial.printf("Can't open database: %s\n", sqlite3_errmsg(*db));
+       return rc;
+   } else {
+       Serial.printf("Opened database successfully\n");
+   }
+   return rc;
+}
+
+char *zErrMsg = 0;
+int db_exec(sqlite3 *db, const char *sql) {
+   Serial.println(sql);
+   long start = micros();
+   int rc = sqlite3_exec(db, sql, callback, (void*)data, &zErrMsg);
+   if (rc != SQLITE_OK) {
+       Serial.printf("SQL error: %s\n", zErrMsg);
+       sqlite3_free(zErrMsg);
+   } else {
+       Serial.printf("Operation done successfully\n");
+   }
+   Serial.print(F("Time taken:"));
+   Serial.println(micros()-start);
+   return rc;
+}
+*/
+
+
 //*******************  Well Functions
 // Helpers to send debug output to right port  change serial port in 1 spot
 void debugPrint(String s){ Serial.print(s);}
@@ -175,7 +243,7 @@ void send(String msg)
     LoRa.endPacket();
     delay(250);
     LoRa.receive();
-    debugPrintln("Sending LORA Packet out to wells");
+    debugPrintln("Sending LORA Packet out to wells or DISPLAY");
 }
 
 
@@ -199,7 +267,7 @@ void sendKeepAlive(){
 }
 
 
-void notifyClients() {  // tracy
+void notifyClients() {
   String requestBody;
     
   doc["radioID"]  = RELAY_ID;          // Add values in the document
@@ -207,7 +275,6 @@ void notifyClients() {  // tracy
   doc["msgType"]  = wellMSG.Msg_Type;  // Add values in the document
   doc["msgValue"] = wellMSG.Msg_Value; // Add values in the document
   
-
   serializeJson(doc, requestBody);
 
   //debugPrintln("json :" + requestBody);
@@ -218,24 +285,24 @@ void notifyClients() {  // tracy
 void pushtoDisplayUnits(){  // Send out whole msg to Display units which are listening
   String requestBody = "";
   doc.clear();
-  doc["radioID"]  = DISPLAY_WELL_ID;          // Add values in the document
+  doc["radioID"]  = DISPLAY_RADIO_ID;          // Add values in the document
   doc["wellID"]   = wellMSG.Well_ID;   // Add values in the document
   doc["msgType"]  = wellMSG.Msg_Type;  // Add values in the document
   doc["msgValue"] = wellMSG.Msg_Value; // Add values in the document
   serializeJson(doc, requestBody);
 
+  debugPrintln("Sending MSG via Lora to Display Station");
   debugPrintln("Echo to Display unit = " + requestBody);
 
+  send(requestBody);
 }
 
 void sendHeartbeatFailure(int wellid){
   doc.clear();
-  doc["Status"] = String(wellid) + " 1";  // Offline
+  doc["Status"] = OFFLINE;  // Offline
   notifyClients();
 
-    delay(100);  // wait a bit before sending out to Display Units
-
-    pushtoDisplayUnits();
+  delay(100);  // wait a bit before sending out to Display Units
 
 }
 
@@ -251,7 +318,7 @@ void appendFile(fs::FS &fs, const char * path, String message){
     if(file.println(message)){
         //Serial.println("Message appended");
     } else {
-        //Serial.println("Append failed");
+        Serial.println("Append failed");
     }
     file.close();
 }
@@ -266,7 +333,7 @@ void writeLogMessage(String msg){  // appends msg to the log file
       return;
   }
   if(file.println(msg)){
-      Serial.println("Message appended");
+      //Serial.println("Message appended");
   } else {
       Serial.println("Append failed");
   }
@@ -274,64 +341,35 @@ void writeLogMessage(String msg){  // appends msg to the log file
 
 }
 
-
-void processLORAMsg(String msg){  // process a JSON msg from a well station LORA 
-  doc.clear();
-  DeserializationError error = deserializeJson(doc, msg);
-  if (error) {
-    debugPrintln("Error decoded JSON msg from wells" + msg);
-    debugPrintln(error.c_str()); 
-    return;
-  }
-
-  wellMSG.Radio_ID  = doc["radioID"];
-  wellMSG.Well_ID   = doc["wellID"];
-  wellMSG.Msg_Type  = doc["msgType"];
-  wellMSG.Msg_Value = doc["msgValue"];
-
-  if(wellMSG.Radio_ID == RELAY_ID) {   // ******************** check to see if msg is for RELAY Station
-    //debugPrintln("RAW MSG is" + msg);
-    debugPrintln("In Process (MSG) from WELL (" + (String)wellMSG.Well_ID + ")  " + 
-                 "Message type was " + printWellMsgType(wellMSG.Msg_Type));
-
-
-    // Keep Heartbeat signals up to date and send out to clients
-    // Msg from well,  track well heartbeat counts
-    if(wellMSG.Well_ID < RELAY_ID){  
-      
-      heartbeatTracking[wellMSG.Well_ID].wellID = wellMSG.Well_ID;
-
-      // Any message from a WELL reset the miscount and means we have contact with WELL
-      heartbeatTracking[wellMSG.Well_ID].lastMillisCount = wellMSG.Msg_Value;
-      heartbeatTracking[wellMSG.Well_ID].missCount = 0;
-
-      if(heartbeatTracking[wellMSG.Well_ID].missCount > maxHeartbeatMisses){
-        doc["Status"] = String(wellMSG.Well_ID) + " 1";  // Offline
-      }
-      else{
-        doc["Status"] = String(wellMSG.Well_ID) + " 0";  // Online
-      }
-    }
-
-    notifyClients();
-
-    delay(100);  // wait a bit before sending out to Display Units
-
-    pushtoDisplayUnits();
-
-    writeLogMessage(msg);
-
-  }
-  else
-    debugPrintln("Msg not for the RELAY");
-}
-
-
 // *******************  Web Socket routines
 
+void serverRequest( String data) {
+
+  DeserializationError error = deserializeJson(doc, data);
+  if (error) {
+      debugPrintln(error.c_str()); 
+      return;
+    }
+
+  const char* keepalive = doc["keepalive"];
+  if (keepalive) {
+    return;
+  }
+  else{
+    // change RADIO ID if we are DISPLAY tracy
+    if(RELAYROLE== false){  // DISPLAY will change this request to DISPLAY_RADIO_ID
+      doc["radioID"] = DISPLAY_RADIO_ID;
+    }
+
+    sendrequestLORA();  // Send out request may got to RELAY or WELL
+  }
+}
 
 void serverRequest(void *arg, uint8_t *data, size_t len) {
-  //AwsFrameInfo *info = (AwsFrameInfo*)arg;
+
+  //String str = (char*)data;
+  //Serial.println(str);
+  doc.clear();
 
   DeserializationError error = deserializeJson(doc, data);
   if (error) {
@@ -345,17 +383,23 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
   //int reqvalue   = doc["msgValue"];
 
   //debugPrintln("Request from RELAY");
-  //debugPrintln("Radio ID =" + reqradioID);
-  //debugPrintln("Well ID =" + reqwellID);
-  //debugPrintln("Req type =" + reqreqType);
-  //debugPrintln("Req value =" + reqvalue);
+  //Serial.println("Radio ID =" + reqradioID);
+  //Serial.println("Well ID =" + reqwellID);
+  //Serial.println("Req type =" + reqreqType);
+  //Serial.println("Req value =" + reqvalue);
   
   const char* keepalive = doc["keepalive"];
   if (keepalive) {
     return;
   }
-  else{
-    sendrequestLORA();  // see what they want to do
+  else{  
+    if(RELAYROLE== true){  // RELAY will change this request to DISPLAY_RADIO_ID
+      doc["radioID"] = WEB_RADIO_ID;   // this will signal a command from WebSocket
+      //Serial.println("Send out the WebSocket request");
+      sendrequestLORA();  // Send out request to the WELLS
+    }else{
+      sendrequestLORA();  // Send out request to the WELLS
+    }
   }
 }
 
@@ -366,10 +410,10 @@ void wsDataEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventT
   //debugPrintln("Got Websocket request");
   switch (type) {
     case WS_EVT_CONNECT:
-      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      Serial.printf("WebSocket client #%u connected from %s\n\r", client->id(), client->remoteIP().toString().c_str());
       break;
     case WS_EVT_DISCONNECT:
-      Serial.printf("WebSocket client #%u disconnected\n", client->id());
+      Serial.printf("WebSocket client #%u disconnected\n\r", client->id());
       break;
     case WS_EVT_DATA:
       //debugPrintln("Data on WEBSOCKET")  ;
@@ -409,6 +453,7 @@ void WIFISetUp(void)
 	WiFi.mode(WIFI_STA);
 	WiFi.setAutoConnect(true);
 	WiFi.begin("firehole","cad123dis");//fill in "Your WiFi SSID","Your Password"
+	//WiFi.begin("Firehole2-2G","cad123dis");//fill in "Your WiFi SSID","Your Password"
 	delay(100);
 
 	byte count = 0;
@@ -567,9 +612,83 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
 }
 
 
+void processLORAMsg(String msg){  // process a JSON msg from a well station LORA 
+  doc.clear();
+  DeserializationError error = deserializeJson(doc, msg);
+  if (error) {
+    debugPrintln("Error decoded JSON msg from wells" + msg);
+    debugPrintln(error.c_str()); 
+    return;
+  }
+
+  Serial.println("In processLORAMsg: " + msg);
+
+  wellMSG.Radio_ID  = doc["radioID"];
+  wellMSG.Well_ID   = doc["wellID"];
+  wellMSG.Msg_Type  = doc["msgType"];
+  wellMSG.Msg_Value = doc["msgValue"];
+  doc["Status"]     = ONLINE;  // Online
+
+  if(wellMSG.Radio_ID == RELAY_ID) {   // ******************** check to see if msg is for RELAY Station
+    //debugPrintln("RAW MSG is" + msg);
+    debugPrintln("In Process (MSG) from WELL (" + (String)wellMSG.Well_ID + ")  " + 
+                 "Message type was " + printWellMsgType(wellMSG.Msg_Type));
+
+    // Keep Heartbeat signals up to date and send out to clients
+    // Msg from well,  track well heartbeat counts
+    if(wellMSG.Well_ID < RELAY_ID){  
+      
+      heartbeatTracking[wellMSG.Well_ID].wellID = wellMSG.Well_ID;
+
+      // Any message from a WELL reset the miscount and means we have contact with WELL
+      heartbeatTracking[wellMSG.Well_ID].lastMillisCount = wellMSG.Msg_Value;
+      heartbeatTracking[wellMSG.Well_ID].missCount = 0;
+
+      if(heartbeatTracking[wellMSG.Well_ID].missCount > maxHeartbeatMisses){
+        doc["Status"] = OFFLINE;  // Offline
+      }
+      else{
+        doc["Status"] = ONLINE;  // Online
+      }
+    }
+
+    if(RELAYROLE){
+      notifyClients();  // Update the web clients
+
+      delay(100);  // wait a bit before sending out to Display Units
+
+      pushtoDisplayUnits();
+
+      writeLogMessage(msg ='\n');  // save msg to log file JSON format
+
+    }
+    //debugPrintln("Msg was for the RELAY");
+  }
+
+
+  if(wellMSG.Radio_ID == DISPLAY_RADIO_ID) {   // ******************** check to see if msg is for DISPLAY UNIT
+    //debugPrintln("Msg was for the DISPLAY");
+    doc["Status"]     = ONLINE;  // Online
+    notifyClients();  // Update the web clients at DISPLAY UNIT
+  }
+
+  if(wellMSG.Radio_ID == WEB_RADIO_ID && RELAYROLE) {   // ******************** check to see if msg came DISPLAY UNIT
+    //debugPrintln("Msg came from RELAY");
+    wellMSG.Radio_ID  = RELAY_ID;
+    sendrequestLORA();  // change to sent from RELAY and send out via lora to wells
+  }
+
+}
+
+
 void setup(){  // ****************************   1 Time SETUP 
 
-  //Serial.begin(115200);
+  Serial.begin(115200);
+  pinMode(ROLE_GPIO, INPUT_PULLDOWN);
+  pinMode(WIFI_GPIO, INPUT_PULLDOWN);
+
+  RELAYROLE = digitalRead(ROLE_GPIO);  // set the role based on jumper
+  WIFIMODESTATION = digitalRead(WIFI_GPIO);  // set the WiFi to STATION OR AP based on jumper
 
   for (int i = 0; i < RELAY_ID-1; i++)  // reset tracking values
   {
@@ -578,50 +697,88 @@ void setup(){  // ****************************   1 Time SETUP
     heartbeatTracking[i].missCount = 0;
   }
   
- 
-
 	Heltec.begin(true /*DisplayEnable Enable*/, true /*LoRa Enable*/, true /*Serial Enable*/, true /*LoRa use PABOOST*/, BAND /*LoRa RF working band*/);
 
-  SPIClass(1);
-  spi1.begin(17, 13, 23, 22);
+  if(RELAYROLE){  // RELAY records data on SD CARD
 
-  if(!SD.begin(22, spi1)){
-      Serial.println("Card Mount Failed");
-      return;
-  }
-  uint8_t cardType = SD.cardType();
+    debugPrintln("ROLE IS RELAY");
 
-  if(cardType == CARD_NONE){
-      Serial.println("No SD card attached");
-      return;
+    // Set up SD Card
+    SPIClass(1);
+    //spi1.begin(17, 13, 23, 22);
+    spi1.begin(17, 13, 23, 2);
+
+    if(!SD.begin(22, spi1)){
+        Serial.println("Card Mount Failed");
+        //return;
+    }
+    uint8_t cardType = SD.cardType();
+
+    if(cardType == CARD_NONE){
+        Serial.println("No SD card attached");
+        //return;
+    }
+
+    Serial.print("SD Card Type: ");
+    if(cardType == CARD_MMC){
+        Serial.println("MMC");
+    } else if(cardType == CARD_SD){
+        Serial.println("SDSC");
+    } else if(cardType == CARD_SDHC){
+        Serial.println("SDHC");
+    } else {
+        Serial.println("UNKNOWN");
+    }
+  }else{
+      debugPrintln("ROLE IS DISPLAY");
   }
 
-  Serial.print("SD Card Type: ");
-  if(cardType == CARD_MMC){
-      Serial.println("MMC");
-  } else if(cardType == CARD_SD){
-      Serial.println("SDSC");
-  } else if(cardType == CARD_SDHC){
-      Serial.println("SDHC");
-  } else {
-      Serial.println("UNKNOWN");
+//  Setup RTC
+/*
+ if (! rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    Serial.flush();
   }
+
+  DateTime now = rtc.now();
+      Serial.print(now.year(), DEC);
+    Serial.print('/');
+    Serial.print(now.month(), DEC);
+    Serial.print('/');
+    Serial.print(now.day(), DEC);
+    Serial.print(" (");
+*/
+
+   //sqlite3 *db1;
+   //char *zErrMsg = 0;
+   //int rc;
+
+   //sqlite3_initialize();
+   //rc = db_exec(db1, "SELECT * from history");
+   
+   //if (rc != SQLITE_OK) {
+   //    sqlite3_close(db1);
+   //    return;
+   //}
 
 
 	logo();
 	delay(500);
 	Heltec.display -> clear();
 
-	WIFISetUp();  // uncomment this to go back to station mode
-	WiFi.mode(WIFI_MODE_STA);  // uncomment this to go back to station mode
-	delay(100);
+  if(WIFIMODESTATION){
+    WIFISetUp();  // uncomment this to go back to station mode
+    WiFi.mode(WIFI_MODE_STA);  // uncomment this to go back to station mode
+    delay(100);
+  }else{
+    //Connect to Wi-Fi network with SSID and password
+    //Serial.print("Setting AP (Access Point)…");
+    // Remove the password parameter, if you want the AP (Access Point) to be open
+    WiFi.softAP("WellDisplay");
+  }
 
   
-  //Connect to Wi-Fi network with SSID and password
-  //Serial.print("Setting AP (Access Point)…");
-  // Remove the password parameter, if you want the AP (Access Point) to be open
-  //WiFi.softAP("Welltest","cad123dis");
-  
+ 
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
@@ -636,20 +793,19 @@ void setup(){  // ****************************   1 Time SETUP
   }
   server.begin();
 
-
-
-  debugPrintln(WiFi.localIP());
+  Serial.println(WiFi.localIP());
 
 
 	chipid=ESP.getEfuseMac();//The chip ID is essentially its MAC address(length: 6 bytes).
 	Serial.printf("ESP32ChipID=%04X",(uint16_t)(chipid>>32));//print High 2 bytes
-	Serial.printf("%08X\n",(uint32_t)chipid);//print Low 4bytes.
+	Serial.printf("%08X\n\r",(uint32_t)chipid);//print Low 4bytes.
 
   attachInterrupt(0,interrupt_GPIO0,FALLING);
   
 	LoRa.onReceive(onLORAReceive);
 
   LoRa.receive();
+
   displaySendReceive();
 
   // Route for root / web page
@@ -674,7 +830,7 @@ void setup(){  // ****************************   1 Time SETUP
   });
 
   server.on("/relaylog.txt", HTTP_GET, [](AsyncWebServerRequest *request){
-  request->send(SPIFFS, "/relaylog.txt","text/css");
+  request->send(SD, "/relaylog.txt","text/html");
   });
 
 

@@ -3,6 +3,7 @@
 var gateway = `ws://${window.location.hostname}/ws`;
 var websocket;
 var msgcounter = 0;
+var RADIO_ID = 101; // RADIO ID to send to RELAY/DISPLAY Stations
 
 window.addEventListener("load", onload);
 
@@ -64,7 +65,7 @@ function WebSocketkeepalive() {
 function sendRequest(wellID, requestType) {
   // Put this in JSON format and send to server
   var obj = new Object();
-  obj.radioID = 99;
+  obj.radioID = RADIO_ID;
   obj.wellID = wellID;
   obj.msgType = requestType;
   obj.msgValue = 0;
@@ -79,6 +80,7 @@ function sendRequest(wellID, requestType) {
 
 function lastmsgtxt(input, msg) {
   var obj = document.getElementById(input);
+  var w = "";
   //console.log("msg in " + msg);
   text = "";
   text2 = "";
@@ -89,6 +91,7 @@ function lastmsgtxt(input, msg) {
       switch (s[2]) {
         case "0":
           text2 = " IDLE";
+          w = "Well" + s[0];
           document.getElementById(w).style.backgroundColor = "greenyellow";
           break;
         case "1":
@@ -111,6 +114,8 @@ function lastmsgtxt(input, msg) {
           break;
         case "7":
           text2 = " FAULT";
+          w = "Well" + s[0];
+          document.getElementById(w).style.backgroundColor = "yellow";
           break;
         default:
           text2 = "INVALID STATE CODE";
@@ -141,18 +146,22 @@ function lastmsgtxt(input, msg) {
       switch (s[2]) {
         case "0":
           text2 = " START FAILURE";
+          w = "Well" + s[0];
           document.getElementById(w).style.backgroundColor = "yellow";
           break;
         case "1":
           text2 = " POWER FAIL ON FILL";
+          w = "Well" + s[0];
           document.getElementById(w).style.backgroundColor = "yellow";
           break;
         case "2":
           text2 = " FILL TIME EXCEEDED";
+          w = "Well" + s[0];
           document.getElementById(w).style.backgroundColor = "yellow";
           break;
         case "3":
           text2 = " STOP ERROR";
+          w = "Well" + s[0];
           document.getElementById(w).style.backgroundColor = "yellow";
           break;
         case "4":
@@ -288,6 +297,8 @@ function updateCount() {
 
 function updateHeartbeatStatus(msg) {
   const s = msg.split(" ");
+  var w = "";
+  console.log("msg in heartbeat is " + msg);
   if (s[1] == "0") {
     w = "Well" + s[0];
     if (document.getElementById(w).style.backgroundColor != "yellow") {
@@ -295,6 +306,7 @@ function updateHeartbeatStatus(msg) {
       document.getElementById(w).style.backgroundColor = "greenyellow";
     }
   } else {
+    w = "Well" + s[0];
     document.getElementById(w).innerHTML = "Well " + s[0] + "  OFFLINE";
     document.getElementById(w).style.backgroundColor = "Red";
   }
@@ -315,7 +327,7 @@ function onMessage(event) {
     return;
   }
 
-  updateHeartbeatStatus(Status);
+  updateHeartbeatStatus(lastcmd["wellID"] + " " + lastcmd["Status"]);
 
   lastmsgtxt(
     "lastmsg",
