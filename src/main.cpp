@@ -60,7 +60,7 @@ String packSize = "--";
 String packet;
 String lastpacket;
 
-unsigned int counter = 0;
+unsigned int sent_msg_counter = 0;
 
 bool receiveflag = false; // software flag for LoRa receiver, received data makes it true.
 
@@ -235,15 +235,32 @@ String printWellMsgType(WELL_MSG_TYPE wmt){
   }
 }
 
+void displaySendReceive()
+{
+  Heltec.display -> clear();
+  Heltec.display -> display();
+
+  Heltec.display -> drawString(0, 0, "Last MSG Received:");
+  //Heltec.display -> drawString(0, 0, "Received Size  " + packSize + " packages:");
+  Heltec.display -> drawString(0, 10, packet);
+  Heltec.display -> drawString(0, 20,  printWellMsgType(wellMSG.Msg_Type));
+  Heltec.display -> drawString(0, 40, "With " + rssi + "db");
+  Heltec.display -> drawString(0, 50, "Sent " + (String)(sent_msg_counter-1) + " requests");
+  Heltec.display -> display();
+  delay(50);
+  Heltec.display -> clear();
+}
+
 void send(String msg)
 {
     LoRa.beginPacket();
-    LoRa.print(msg);
-    counter++;
+    LoRa.print(msg); 
     LoRa.endPacket();
     delay(250);
     LoRa.receive();
     debugPrintln("Sending LORA Packet out to wells or DISPLAY");
+    sent_msg_counter++;
+    displaySendReceive();
 }
 
 
@@ -560,19 +577,6 @@ void interrupt_GPIO0()
   }
 }
 
-void displaySendReceive()
-{
-  Heltec.display -> drawString(0, 0, "Last MSG Received:");
-  //Heltec.display -> drawString(0, 0, "Received Size  " + packSize + " packages:");
-  Heltec.display -> drawString(0, 10, packet);
-  Heltec.display -> drawString(0, 20,  printWellMsgType(wellMSG.Msg_Type));
-  Heltec.display -> drawString(0, 40, "With " + rssi + "db");
-  Heltec.display -> drawString(0, 50, "Sent " + (String)(counter-1) + " requests");
-  Heltec.display -> display();
-  delay(50);
-  Heltec.display -> clear();
-}
-
 void onLORAReceive(int packetSize)//LoRa receiver interrupt service
 {
   //if (packetSize == 0) return;
@@ -857,6 +861,7 @@ void loop() {
     LoRa.receive(); 
     processLORAMsg(packet);  // Process/discard the message
     delay(100);
+    displaySendReceive();  // update OLED display
     receiveflag = false;
   }
 
@@ -884,8 +889,6 @@ void loop() {
 
       }
     }
-        
-    displaySendReceive();
 
     LoRa.receive();  // gotta have this in loop to make sure to LISTEN
 
