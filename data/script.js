@@ -56,7 +56,7 @@ function clearHistory() {
 
 function WebSocketkeepalive() {
   var obj = new Object();
-  obj.keepalive = "1";
+  obj.KA = "1";
   var keepaliveRequest = JSON.stringify(obj);
   //console.log(JSON.parse(keepaliveRequest)); // Request in JSON
   websocket.send(keepaliveRequest);
@@ -65,10 +65,10 @@ function WebSocketkeepalive() {
 function sendRequest(wellID, requestType) {
   // Put this in JSON format and send to server
   var obj = new Object();
-  obj.radioID = RADIO_ID;
-  obj.wellID = wellID;
-  obj.msgType = requestType;
-  obj.msgValue = 0;
+  obj.RID = RADIO_ID;
+  obj.WID = wellID;
+  obj.MT = requestType;
+  obj.MV = 0;
 
   //convert object to json string
   var wellRequest = JSON.stringify(obj);
@@ -315,28 +315,28 @@ function updateHeartbeatStatus(msg) {
 function onMessage(event) {
   console.log(event.data);
   lastcmd = JSON.parse(event.data);
-  var radioID = lastcmd["radioID"];
-  var wellID = lastcmd["wellID"];
-  var msgType = lastcmd["msgType"];
-  var msgValue = lastcmd["msgValue"];
-  var Status = lastcmd["Status"];
-  var keepalivemsg = lastcmd["keepalive"];
+  var radioID = lastcmd["RID"]; // Radio ID
+  var wellID = lastcmd["WID"];
+  var msgType = lastcmd["MT"];
+  var msgValue = lastcmd["MV"];
+  var Status = lastcmd["ST"];
+  var keepalivemsg = lastcmd["KA"];
 
   if (keepalivemsg) {
     console.log("Got a keep alive from server");
     return;
   }
 
-  updateHeartbeatStatus(lastcmd["wellID"] + " " + lastcmd["Status"]);
+  updateHeartbeatStatus(lastcmd["WID"] + " " + lastcmd["ST"]);
 
   lastmsgtxt(
     "lastmsg",
-    lastcmd["wellID"] + " " + lastcmd["msgType"] + " " + lastcmd["msgValue"]
+    lastcmd["WID"] + " " + lastcmd["MT"] + " " + lastcmd["MV"]
   );
 
   addtxt(
     "msghistory",
-    lastcmd["wellID"] + " " + lastcmd["msgType"] + " " + lastcmd["msgValue"]
+    lastcmd["WID"] + " " + lastcmd["MT"] + " " + lastcmd["MV"]
   );
 
   updateCount();

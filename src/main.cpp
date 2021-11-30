@@ -251,31 +251,31 @@ void displaySendReceive()
   Heltec.display -> clear();
 }
 
-void send(String msg)
+
+void send(String msg, String debugMsg)
 {
     LoRa.beginPacket();
     LoRa.print(msg); 
     LoRa.endPacket();
-    delay(250);
+    delay(50);
     LoRa.receive();
-    debugPrintln("Sending LORA Packet out to wells or DISPLAY");
+    debugPrintln(debugMsg);
     sent_msg_counter++;
     displaySendReceive();
 }
 
 
-void sendrequestLORA(){  // send out a request to all wells via LORA 
+void sendrequestLORA(String debugMsg){  // send out a request to all wells via LORA 
   String requestBody;
-
   serializeJson(doc, requestBody);   // data is in the doc
   //debugPrintln(requestBody);
-  send(requestBody); 
+  send(requestBody, debugMsg); 
 }
 
 void sendKeepAlive(){
   String keepaliveBody;
   doc.clear();
-  doc["keepalive"] =  1;
+  doc["KA"] =  1;
   serializeJson(doc, keepaliveBody);
   //Serial.println("Sending out keepalive msg via websocket");
   //Serial.println(keepaliveBody);
@@ -287,14 +287,14 @@ void sendKeepAlive(){
 void notifyClients() {
   String requestBody;
     
-  doc["radioID"]  = RELAY_ID;          // Add values in the document
-  doc["wellID"]   = wellMSG.Well_ID;   // Add values in the document
-  doc["msgType"]  = wellMSG.Msg_Type;  // Add values in the document
-  doc["msgValue"] = wellMSG.Msg_Value; // Add values in the document
+  doc["RID"]  = RELAY_ID;          // Add values in the document
+  doc["WID"]   = wellMSG.Well_ID;   // Add values in the document
+  doc["MT"]  = wellMSG.Msg_Type;  // Add values in the document
+  doc["MV"] = wellMSG.Msg_Value; // Add values in the document
   
   serializeJson(doc, requestBody);
 
-  //debugPrintln("json :" + requestBody);
+  debugPrintln("json :" + requestBody);
   ws.textAll(requestBody);
 
 }
@@ -302,21 +302,21 @@ void notifyClients() {
 void pushtoDisplayUnits(){  // Send out whole msg to Display units which are listening
   String requestBody = "";
   doc.clear();
-  doc["radioID"]  = DISPLAY_RADIO_ID;          // Add values in the document
-  doc["wellID"]   = wellMSG.Well_ID;   // Add values in the document
-  doc["msgType"]  = wellMSG.Msg_Type;  // Add values in the document
-  doc["msgValue"] = wellMSG.Msg_Value; // Add values in the document
+  doc["RID"]  = DISPLAY_RADIO_ID;          // Add values in the document
+  doc["WID"]   = wellMSG.Well_ID;   // Add values in the document
+  doc["MT"]  = wellMSG.Msg_Type;  // Add values in the document
+  doc["MV"] = wellMSG.Msg_Value; // Add values in the document
   serializeJson(doc, requestBody);
 
   debugPrintln("Sending MSG via Lora to Display Station");
   debugPrintln("Echo to Display unit = " + requestBody);
 
-  send(requestBody);
+  send(requestBody, "Pushing LORA  MSG to DISPLAY unit");
 }
 
 void sendHeartbeatFailure(int wellid){
   doc.clear();
-  doc["Status"] = OFFLINE;  // Offline
+  doc["ST"] = OFFLINE;  // Offline
   notifyClients();
 
   delay(100);  // wait a bit before sending out to Display Units
@@ -368,17 +368,17 @@ void serverRequest( String data) {
       return;
     }
 
-  const char* keepalive = doc["keepalive"];
+  const char* keepalive = doc["KA"];
   if (keepalive) {
     return;
   }
   else{
-    // change RADIO ID if we are DISPLAY tracy
+    // change RADIO ID if we are DISPLAY 
     if(RELAYROLE== false){  // DISPLAY will change this request to DISPLAY_RADIO_ID
-      doc["radioID"] = DISPLAY_RADIO_ID;
+      doc["RID"] = DISPLAY_RADIO_ID;
     }
 
-    sendrequestLORA();  // Send out request may got to RELAY or WELL
+    sendrequestLORA("Sent LORA From WebSocket Request");  // Send out request may go to RELAY or WELL
   }
 }
 
@@ -394,10 +394,10 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
       return;
     }
 
-  //int reqradioID = doc["radioID"];
-  //int reqwellID  = doc["wellID"];
-  //int reqreqType = doc["msgType"];
-  //int reqvalue   = doc["msgValue"];
+  //int reqradioID = doc["RID"];
+  //int reqwellID  = doc["WID"];
+  //int reqreqType = doc["MT"];
+  //int reqvalue   = doc["MV"];
 
   //debugPrintln("Request from RELAY");
   //Serial.println("Radio ID =" + reqradioID);
@@ -405,17 +405,16 @@ void serverRequest(void *arg, uint8_t *data, size_t len) {
   //Serial.println("Req type =" + reqreqType);
   //Serial.println("Req value =" + reqvalue);
   
-  const char* keepalive = doc["keepalive"];
+  const char* keepalive = doc["KA"];
   if (keepalive) {
     return;
   }
   else{  
     if(RELAYROLE== true){  // RELAY will change this request to DISPLAY_RADIO_ID
-      doc["radioID"] = WEB_RADIO_ID;   // this will signal a command from WebSocket
-      //Serial.println("Send out the WebSocket request");
-      sendrequestLORA();  // Send out request to the WELLS
+      doc["RID"] = WEB_RADIO_ID;   // this will signal a command from WebSocket
+      sendrequestLORA("Sending LORA data to WELLS");  // Send out request to the WELLS
     }else{
-      sendrequestLORA();  // Send out request to the WELLS
+      sendrequestLORA("ServerRequest sent LORA Msg.... ");  // Send out request to the WELLS
     }
   }
 }
@@ -583,11 +582,11 @@ void onLORAReceive(int packetSize)//LoRa receiver interrupt service
   packet = "";
   packSize = String(packetSize,DEC);
 
-  //debugPrintln("onRecieved Interupt handler" + packet);
-
-  while (LoRa.available())
-  {
-  packet += (char) LoRa.read();
+  //Serial.print(" In onRecieved Interupt handler Packet size = ");
+  //Serial.println(packetSize);
+  
+  while (LoRa.available()){
+    packet += (char) LoRa.read();  // READ in all the data
   }
 
   lastpacket = packet;  // save packet for processing
@@ -627,11 +626,11 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
 
   Serial.println("In processLORAMsg: " + msg);
 
-  wellMSG.Radio_ID  = doc["radioID"];
-  wellMSG.Well_ID   = doc["wellID"];
-  wellMSG.Msg_Type  = doc["msgType"];
-  wellMSG.Msg_Value = doc["msgValue"];
-  doc["Status"]     = ONLINE;  // Online
+  wellMSG.Radio_ID  = doc["RID"];
+  wellMSG.Well_ID   = doc["WID"];
+  wellMSG.Msg_Type  = doc["MT"];
+  wellMSG.Msg_Value = doc["MV"];
+  doc["ST"]     = ONLINE;  // Online
 
   if(wellMSG.Radio_ID == RELAY_ID) {   // ******************** check to see if msg is for RELAY Station
     //debugPrintln("RAW MSG is" + msg);
@@ -649,10 +648,10 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
       heartbeatTracking[wellMSG.Well_ID].missCount = 0;
 
       if(heartbeatTracking[wellMSG.Well_ID].missCount > maxHeartbeatMisses){
-        doc["Status"] = OFFLINE;  // Offline
+        doc["ST"] = OFFLINE;  // Offline
       }
       else{
-        doc["Status"] = ONLINE;  // Online
+        doc["ST"] = ONLINE;  // Online
       }
     }
 
@@ -672,14 +671,14 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
 
   if(wellMSG.Radio_ID == DISPLAY_RADIO_ID) {   // ******************** check to see if msg is for DISPLAY UNIT
     //debugPrintln("Msg was for the DISPLAY");
-    doc["Status"]     = ONLINE;  // Online
+    doc["ST"]     = ONLINE;  // Online
     notifyClients();  // Update the web clients at DISPLAY UNIT
   }
 
   if(wellMSG.Radio_ID == WEB_RADIO_ID && RELAYROLE) {   // ******************** check to see if msg came DISPLAY UNIT
     //debugPrintln("Msg came from RELAY");
     wellMSG.Radio_ID  = RELAY_ID;
-    sendrequestLORA();  // change to sent from RELAY and send out via lora to wells
+    sendrequestLORA("Relayed LORA msg sent out WELLS");  // change to sent from RELAY and send out via lora to wells
   }
 
 }
@@ -778,7 +777,11 @@ void setup(){  // ****************************   1 Time SETUP
     //Connect to Wi-Fi network with SSID and password
     //Serial.print("Setting AP (Access Point)…");
     // Remove the password parameter, if you want the AP (Access Point) to be open
-    WiFi.softAP("WellDisplay");
+    if(RELAYROLE)
+      WiFi.softAP("WellRelay");
+    else
+      WiFi.softAP("WellDisplay");
+
   }
 
   
