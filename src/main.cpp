@@ -33,6 +33,9 @@
 #include "FS.h"
 #include "SD.h"
 
+#include <U8x8lib.h>
+
+
 
 boolean RELAYROLE       = true;   // false is DISPLAY mode
 boolean WIFIMODESTATION = true;   // false is DISPLAY mode
@@ -59,6 +62,7 @@ String rssi = "RSSI --";
 String packSize = "--";
 String packet;
 String lastpacket;
+IPAddress IP;
 
 unsigned int sent_msg_counter = 0;
 
@@ -145,6 +149,78 @@ StaticJsonDocument<256> doc;
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
+
+// OLED screen setup
+U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
+
+String printWellErrorMsgs(int m){
+  return Well_Error_Msg_Strings[m];
+}
+
+String printWellStatusCodes(int c){
+  // TANK_EMPTY=0, TANK_FULL=1, WELL_ERROR=2
+  switch (c)
+  {
+  case TANK_EMPTY:
+    return "TANK_EMPTY";
+    break;
+  case TANK_FULL:
+    return "TANK_FULL";
+    break;
+  case WELL_ERROR:
+    return "WELL_ERROR";
+    break;
+  case -1:
+    return "Partial Fill";
+    break;
+  default:
+    return "";
+    break;
+  }
+}
+
+String printStates(int s){
+  switch (s)
+  {
+  case IDLE:
+    return "IDLE";
+    break;
+  case START:
+    return "START";
+    break;
+  case PWRWAIT:
+    return "PWRWAIT";
+    break;
+  case FILLING:
+    return "FILLING";
+    break;
+  case STOPPED:
+    return "STOPPED";
+    break;
+  case KILLPOWER:
+    return "KILLPOWER";
+    break;
+  case FILLCOMPLETED:
+    return "FILLCOMPLETED";
+    break;
+  case FAULT:
+    return "FAULT";
+    break;
+  default:
+    return "";
+    break;
+  }
+}
+
+
+
+// OLED Functions
+void pre(void)
+{
+  u8x8.setFont(u8x8_font_chroma48medium8_r); 
+  u8x8.clear();
+  u8x8.setCursor(0,0);
+}
 
 
 // ******************  SQLite Routines
@@ -235,21 +311,152 @@ String printWellMsgType(WELL_MSG_TYPE wmt){
   }
 }
 
-void displaySendReceive()
-{
-  Heltec.display -> clear();
-  Heltec.display -> display();
+void loraSentScreen(){
+  String rid = doc["RID"];
+  String wid = doc["WID"];
+  String mt = doc["MT"];
+  String mv = doc["MV"];
 
-  Heltec.display -> drawString(0, 0, "Last MSG Received:");
-  //Heltec.display -> drawString(0, 0, "Received Size  " + packSize + " packages:");
-  Heltec.display -> drawString(0, 10, packet);
-  Heltec.display -> drawString(0, 20,  printWellMsgType(wellMSG.Msg_Type));
-  Heltec.display -> drawString(0, 40, "With " + rssi + "db");
-  Heltec.display -> drawString(0, 50, "Sent " + (String)(sent_msg_counter-1) + " requests");
-  Heltec.display -> display();
-  delay(50);
-  Heltec.display -> clear();
+  pre();
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+  //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
+  u8x8.println("XMIT LORA Msg");
+  u8x8.println("");
+  u8x8.println("Asking Well " + wid);  
+  u8x8.setFont(u8x8_font_7x14B_1x2_r);
+  u8x8.println(printWellMsgType(doc["MT"]));
+
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+  u8x8.println("");
+  u8x8.println("SENT........");  
 }
+
+void loraRCVDScreen(){
+  String rid = doc["RID"];
+  String wid = doc["WID"];
+  String mt = doc["MT"];
+  String mv = doc["MV"];
+  int msgradioID = doc["RID"];
+
+  Serial.println("rid = " + rid);
+
+  if(msgradioID == RELAY_RADIO_ID){  // msg from wells to relay
+    pre();
+    u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
+    u8x8.println("LORA WELL Msg");
+    u8x8.println("");
+    //u8x8.println(rid = " " + wid + " " + mt + " " + mv);
+    u8x8.println("Well " + wid);  
+    u8x8.setFont(u8x8_font_7x14B_1x2_r);
+    u8x8.println(printWellMsgType(doc["MT"]));
+
+    int temp = doc["MT"];
+    int tmv = doc["MV"];
+    switch (temp)
+    {
+    case WELL_MSG_TYPE::WELL_STATE :
+      u8x8.println(printStates(tmv));
+      break;
+    case WELL_MSG_TYPE::WELL_STATUS :
+        u8x8.println(printWellStatusCodes(tmv));
+      break;
+    case WELL_MSG_TYPE::WELL_ERRORS:
+        u8x8.println(printWellErrorMsgs(tmv));
+      break;
+    case WELL_MSG_TYPE::HEARTBEAT :
+      u8x8.println(String(tmv));
+      break;
+    default:
+      break;
+    }
+
+    u8x8.println(mv);
+
+    //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
+    u8x8.setFont(u8x8_font_chroma48medium8_r);
+    u8x8.println("");
+    u8x8.println(rssi);
+  }
+
+  if(msgradioID == WEB_RADIO_ID){  // msg from DISPLAY to relay
+    pre();
+    u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
+    u8x8.println("DISPLAY Msg");
+    u8x8.println("");
+    //u8x8.println(rid = " " + wid + " " + mt + " " + mv);
+    u8x8.println("Well " + wid);  
+    u8x8.setFont(u8x8_font_7x14B_1x2_r);
+    u8x8.println(printWellMsgType(doc["MT"]));
+
+    int temp = doc["MT"];
+    int tmv = doc["MV"];
+    switch (temp)
+    {
+    case WELL_MSG_TYPE::WELL_STATE :
+      u8x8.println(printStates(tmv));
+      break;
+    case WELL_MSG_TYPE::WELL_STATUS :
+        u8x8.println(printWellStatusCodes(tmv));
+      break;
+    case WELL_MSG_TYPE::WELL_ERRORS:
+        u8x8.println(printWellErrorMsgs(tmv));
+      break;
+    case WELL_MSG_TYPE::HEARTBEAT :
+      u8x8.println(String(tmv));
+      break;
+    default:
+      break;
+    }
+
+    u8x8.println(mv);
+
+    //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
+    u8x8.setFont(u8x8_font_chroma48medium8_r);
+    u8x8.println("");
+    u8x8.println(rssi);  // tracy
+
+  }
+}
+
+
+
+void idleScreen(){
+  
+  String wifiModeString = "";
+  String roleModeString = "";
+  String ipString = "";
+
+  if(WIFIMODESTATION){
+    wifiModeString = "STA Mode";
+    ipString = WiFi.localIP().toString();
+  }
+  else{
+    wifiModeString = "AP Mode";
+    ipString = String(IP);
+  }
+
+
+  if(RELAYROLE)
+    roleModeString = "RELAY";
+  else
+    roleModeString = "DISPLAY";
+
+
+
+  pre();
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+  //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
+  u8x8.println("Mode: " + roleModeString);
+  u8x8.println("WiFi:" + wifiModeString);
+  u8x8.println("");
+  u8x8.println(ipString);
+  u8x8.println("");
+  u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
+  u8x8.println("IDLE...");
+}
+
 
 
 void send(String msg, String debugMsg)
@@ -261,7 +468,6 @@ void send(String msg, String debugMsg)
     LoRa.receive();
     debugPrintln(debugMsg);
     sent_msg_counter++;
-    displaySendReceive();
 }
 
 
@@ -270,6 +476,7 @@ void sendrequestLORA(String debugMsg){  // send out a request to all wells via L
   serializeJson(doc, requestBody);   // data is in the doc
   //debugPrintln(requestBody);
   send(requestBody, debugMsg); 
+  loraSentScreen();  // tracy
 }
 
 void sendKeepAlive(){
@@ -468,7 +675,7 @@ void WIFISetUp(void)
 	delay(100);
 	WiFi.mode(WIFI_STA);
 	WiFi.setAutoConnect(true);
-	WiFi.begin("firehole","cad123dis");//fill in "Your WiFi SSID","Your Password"
+	WiFi.begin("firehole", "cad123dis");//fill in "Your WiFi SSID","Your Password"
 	//WiFi.begin("Firehole2-2G","cad123dis");//fill in "Your WiFi SSID","Your Password"
 	delay(100);
 
@@ -477,86 +684,54 @@ void WIFISetUp(void)
 	while(WiFi.status() != WL_CONNECTED )
 	{
 		count ++;
-		delay(500);
-		Heltec.display -> drawString(0, 0, "Connecting...");
-		Heltec.display -> display();
+		delay(750);
+		//Heltec.display -> drawString(0, 0, "Connecting...");  
+		//Heltec.display -> display();
+
+    pre();
+    u8x8.println("Connecting...");
+    u8x8.println(ssid);
+
     debugPrintln("Trying to connect ");
     debugPrintln(count);
 	}
 
-	Heltec.display -> clear();
+	//Heltec.display -> clear();
 	if(WiFi.status() == WL_CONNECTED)
 	{
-		Heltec.display -> drawString(0, 0, "Connecting...OK.");
-		Heltec.display -> display();
+    pre();
+    u8x8.println("Connected");
+    u8x8.println(ssid);
+
+		//Heltec.display -> drawString(0, 0, "Connecting...OK.");
+		//Heltec.display -> display();
 //		delay(500);
 	}
 	else
 	{
-		Heltec.display -> clear();
-		Heltec.display -> drawString(0, 0, "Connecting...Failed");
-		Heltec.display -> display();
+    pre();
+    u8x8.println("Connection");
+    u8x8.println("FAILED");
+
+		//Heltec.display -> clear();
+		//Heltec.display -> drawString(0, 0, "Connecting...Failed");
+		//Heltec.display -> display();
 		//while(1);
 	}
 
-	Heltec.display -> drawString(0, 10, "WIFI Setup done");
-	Heltec.display -> display();
+    pre();
+    u8x8.println("WIFI Setup");
+    u8x8.println("Done");
+
+	//Heltec.display -> drawString(0, 10, "WIFI Setup done");
+	//Heltec.display -> display();
 	delay(500);
 }
 
-void WIFIScan(unsigned int value)
-{
-	unsigned int i;
-    WiFi.mode(WIFI_STA);
-
-	for(i=0;i<value;i++)
-	{
-		Heltec.display -> drawString(0, 20, "Scan start...");
-		Heltec.display -> display();
-
-		int n = WiFi.scanNetworks();
-		Heltec.display -> drawString(0, 30, "Scan done");
-		Heltec.display -> display();
-		delay(500);
-		Heltec.display -> clear();
-
-		if (n == 0)
-		{
-			Heltec.display -> clear();
-			Heltec.display -> drawString(0, 0, "no network found");
-			Heltec.display -> display();
-			//while(1);
-		}
-		else
-		{
-			Heltec.display -> drawString(0, 0, (String)n);
-			Heltec.display -> drawString(14, 0, "networks found:");
-			Heltec.display -> display();
-			delay(500);
-
-			for (int i = 0; i < n; ++i) {
-			// Print SSID and RSSI for each network found
-				Heltec.display -> drawString(0, (i+1)*9,(String)(i + 1));
-				Heltec.display -> drawString(6, (i+1)*9, ":");
-				Heltec.display -> drawString(12,(i+1)*9, (String)(WiFi.SSID(i)));
-				Heltec.display -> drawString(90,(i+1)*9, " (");
-				Heltec.display -> drawString(98,(i+1)*9, (String)(WiFi.RSSI(i)));
-				Heltec.display -> drawString(114,(i+1)*9, ")");
-				//            display.println((WiFi.encryptionType(i) == WIFI_AUTH_OPEN)?" ":"*");
-				delay(10);
-			}
-		}
-
-		Heltec.display -> display();
-		delay(800);
-		Heltec.display -> clear();
-	}
-}
-
 void logo(){
-	Heltec.display -> clear();
-	Heltec.display -> drawXbm(0,5,logo_width,logo_height,(const unsigned char *)logo_bits);
-	Heltec.display -> display();
+	//Heltec.display -> clear();
+	//Heltec.display -> drawXbm(0,5,logo_width,logo_height,(const unsigned char *)logo_bits);
+	//Heltec.display -> display();
 }
 
 bool resendflag=false;
@@ -656,6 +831,9 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
     }
 
     if(RELAYROLE){
+
+      loraRCVDScreen();  // update OLED Display
+
       notifyClients();  // Update the web clients
 
       delay(100);  // wait a bit before sending out to Display Units
@@ -677,8 +855,11 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
 
   if(wellMSG.Radio_ID == WEB_RADIO_ID && RELAYROLE) {   // ******************** check to see if msg came DISPLAY UNIT
     //debugPrintln("Msg came from RELAY");
+    //loraRCVDScreen();
+    //delay(1000);
     wellMSG.Radio_ID  = RELAY_ID;
     sendrequestLORA("Relayed LORA msg sent out WELLS");  // change to sent from RELAY and send out via lora to wells
+    
   }
 
 }
@@ -700,7 +881,9 @@ void setup(){  // ****************************   1 Time SETUP
     heartbeatTracking[i].missCount = 0;
   }
   
-	Heltec.begin(true /*DisplayEnable Enable*/, true /*LoRa Enable*/, true /*Serial Enable*/, true /*LoRa use PABOOST*/, BAND /*LoRa RF working band*/);
+  u8x8.begin();  // start up OLED display
+
+	Heltec.begin(false /*DisplayEnable Enable*/, true /*LoRa Enable*/, true /*Serial Enable*/, true /*LoRa use PABOOST*/, BAND /*LoRa RF working band*/);
 
   if(RELAYROLE){  // RELAY records data on SD CARD
 
@@ -765,9 +948,9 @@ void setup(){  // ****************************   1 Time SETUP
    //}
 
 
-	logo();
-	delay(500);
-	Heltec.display -> clear();
+	//logo();
+	//delay(500);
+	//Heltec.display -> clear();
 
   if(WIFIMODESTATION){
     WIFISetUp();  // uncomment this to go back to station mode
@@ -784,14 +967,12 @@ void setup(){  // ****************************   1 Time SETUP
 
   }
 
-  
- 
-  IPAddress IP = WiFi.softAPIP();
+  IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
 
-  //WIFIScan(1);
-  
+
+  idleScreen();
 
   // Mount up SPIFF for use
   if(!SPIFFS.begin(true)){
@@ -812,8 +993,6 @@ void setup(){  // ****************************   1 Time SETUP
 	LoRa.onReceive(onLORAReceive);
 
   LoRa.receive();
-
-  displaySendReceive();
 
   // Route for root / web page
   //server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -840,13 +1019,12 @@ void setup(){  // ****************************   1 Time SETUP
   request->send(SD, "/relaylog.txt","text/html");
   });
 
-
   // Start server
   server.begin();
 
   initWebSocket();   // ************************   Start up WebSockets 
 
-}
+}  // end of SETUP
 
 void loop() {
   currentMillis = millis();  // used in testing for a regular interval test
@@ -864,7 +1042,6 @@ void loop() {
     LoRa.receive(); 
     processLORAMsg(packet);  // Process/discard the message
     delay(100);
-    displaySendReceive();  // update OLED display
     receiveflag = false;
   }
 
@@ -900,6 +1077,8 @@ void loop() {
   if(long(currentMillis - previousMillis2) > keepaliveTimer) {  // Periodic tasks
     previousMillis2 = currentMillis; 
     sendKeepAlive();
+    pre();
+    idleScreen();
   }
 
 
