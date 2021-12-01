@@ -319,7 +319,6 @@ void loraSentScreen(){
 
   pre();
   u8x8.setFont(u8x8_font_chroma48medium8_r);
-  //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
   u8x8.println("XMIT LORA Msg");
   u8x8.println("");
   u8x8.println("Asking Well " + wid);  
@@ -343,10 +342,8 @@ void loraRCVDScreen(){
   if(msgradioID == RELAY_RADIO_ID){  // msg from wells to relay
     pre();
     u8x8.setFont(u8x8_font_chroma48medium8_r);
-    //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
     u8x8.println("LORA WELL Msg");
     u8x8.println("");
-    //u8x8.println(rid = " " + wid + " " + mt + " " + mv);
     u8x8.println("Well " + wid);  
     u8x8.setFont(u8x8_font_7x14B_1x2_r);
     u8x8.println(printWellMsgType(doc["MT"]));
@@ -373,19 +370,16 @@ void loraRCVDScreen(){
 
     u8x8.println(mv);
 
-    //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
     u8x8.setFont(u8x8_font_chroma48medium8_r);
     u8x8.println("");
     u8x8.println(rssi);
   }
 
-  if(msgradioID == WEB_RADIO_ID){  // msg from DISPLAY to relay
+  if(msgradioID == DISPLAY_RADIO_ID){  // msg from DISPLAY to relay
     pre();
     u8x8.setFont(u8x8_font_chroma48medium8_r);
-    //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
     u8x8.println("DISPLAY Msg");
     u8x8.println("");
-    //u8x8.println(rid = " " + wid + " " + mt + " " + mv);
     u8x8.println("Well " + wid);  
     u8x8.setFont(u8x8_font_7x14B_1x2_r);
     u8x8.println(printWellMsgType(doc["MT"]));
@@ -412,18 +406,14 @@ void loraRCVDScreen(){
 
     u8x8.println(mv);
 
-    //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
     u8x8.setFont(u8x8_font_chroma48medium8_r);
     u8x8.println("");
     u8x8.println(rssi);  // tracy
-
   }
 }
 
 
-
-void idleScreen(){
-  
+void idleScreen(){  
   String wifiModeString = "";
   String roleModeString = "";
   String ipString = "";
@@ -437,17 +427,13 @@ void idleScreen(){
     ipString = String(IP);
   }
 
-
   if(RELAYROLE)
     roleModeString = "RELAY";
   else
     roleModeString = "DISPLAY";
 
-
-
   pre();
   u8x8.setFont(u8x8_font_chroma48medium8_r);
-  //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
   u8x8.println("Mode: " + roleModeString);
   u8x8.println("WiFi:" + wifiModeString);
   u8x8.println("");
@@ -456,8 +442,6 @@ void idleScreen(){
   u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
   u8x8.println("IDLE...");
 }
-
-
 
 void send(String msg, String debugMsg)
 {
@@ -469,7 +453,6 @@ void send(String msg, String debugMsg)
     debugPrintln(debugMsg);
     sent_msg_counter++;
 }
-
 
 void sendrequestLORA(String debugMsg){  // send out a request to all wells via LORA 
   String requestBody;
@@ -494,16 +477,15 @@ void sendKeepAlive(){
 void notifyClients() {
   String requestBody;
     
-  doc["RID"]  = RELAY_ID;          // Add values in the document
-  doc["WID"]   = wellMSG.Well_ID;   // Add values in the document
+  doc["RID"]  = RELAY_ID;         // Add values in the document
+  doc["WID"]   = wellMSG.Well_ID; // Add values in the document
   doc["MT"]  = wellMSG.Msg_Type;  // Add values in the document
-  doc["MV"] = wellMSG.Msg_Value; // Add values in the document
+  doc["MV"] = wellMSG.Msg_Value;  // Add values in the document
   
   serializeJson(doc, requestBody);
 
   debugPrintln("json :" + requestBody);
   ws.textAll(requestBody);
-
 }
 
 void pushtoDisplayUnits(){  // Send out whole msg to Display units which are listening
@@ -526,20 +508,20 @@ void sendHeartbeatFailure(int wellid){
   doc["ST"] = OFFLINE;  // Offline
   notifyClients();
 
-  delay(100);  // wait a bit before sending out to Display Units
-
+  delay(50);  // wait a bit before sending out to Display Units
 }
 
 //void appendFile(fs::FS &fs, const char * path, const char * message){
 void appendFile(fs::FS &fs, const char * path, String message){
     Serial.printf("Appending to file: %s\n", path);
 
-    File file = fs.open(path, FILE_APPEND);
+    File file = fs.open(path, "a");
     if(!file){
         Serial.println("Failed to open file for appending");
         return;
     }
     if(file.println(message)){
+      file.flush();
         //Serial.println("Message appended");
     } else {
         Serial.println("Append failed");
@@ -549,8 +531,8 @@ void appendFile(fs::FS &fs, const char * path, String message){
 
 
 void writeLogMessage(String msg){  // appends msg to the log file
-  //appendFile(SD, RELAYLOGFILENAME, msg);  
-
+  appendFile(SD, RELAYLOGFILENAME, msg);  
+/*
   File file = SD.open(RELAYLOGFILENAME, FILE_APPEND);
   if(!file){
       Serial.println("Failed to open file for appending");
@@ -558,11 +540,12 @@ void writeLogMessage(String msg){  // appends msg to the log file
   }
   if(file.println(msg)){
       //Serial.println("Message appended");
+      file.flush();
   } else {
       Serial.println("Append failed");
   }
   file.close();
-
+*/
 }
 
 // *******************  Web Socket routines
@@ -684,9 +667,7 @@ void WIFISetUp(void)
 	while(WiFi.status() != WL_CONNECTED )
 	{
 		count ++;
-		delay(750);
-		//Heltec.display -> drawString(0, 0, "Connecting...");  
-		//Heltec.display -> display();
+		delay(500);
 
     pre();
     u8x8.println("Connecting...");
@@ -696,42 +677,27 @@ void WIFISetUp(void)
     debugPrintln(count);
 	}
 
-	//Heltec.display -> clear();
 	if(WiFi.status() == WL_CONNECTED)
 	{
     pre();
     u8x8.println("Connected");
     u8x8.println(ssid);
-
-		//Heltec.display -> drawString(0, 0, "Connecting...OK.");
-		//Heltec.display -> display();
-//		delay(500);
 	}
 	else
 	{
     pre();
     u8x8.println("Connection");
     u8x8.println("FAILED");
-
-		//Heltec.display -> clear();
-		//Heltec.display -> drawString(0, 0, "Connecting...Failed");
-		//Heltec.display -> display();
-		//while(1);
 	}
 
     pre();
     u8x8.println("WIFI Setup");
     u8x8.println("Done");
 
-	//Heltec.display -> drawString(0, 10, "WIFI Setup done");
-	//Heltec.display -> display();
 	delay(500);
 }
 
 void logo(){
-	//Heltec.display -> clear();
-	//Heltec.display -> drawXbm(0,5,logo_width,logo_height,(const unsigned char *)logo_bits);
-	//Heltec.display -> display();
 }
 
 bool resendflag=false;
@@ -740,14 +706,9 @@ bool deepsleepflag=false;
 void interrupt_GPIO0()
 {
   delay(10);
+  Serial.println("User button pushed");
   if(digitalRead(0)==0)
   {
-      if(digitalRead(LED)==LOW)
-      {resendflag=true;}
-      else
-      {
-        deepsleepflag=true;
-      }     
   }
 }
 
@@ -836,11 +797,11 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
 
       notifyClients();  // Update the web clients
 
-      delay(100);  // wait a bit before sending out to Display Units
+      delay(50);  // wait a bit before sending out to Display Units
 
       pushtoDisplayUnits();
 
-      writeLogMessage(msg ='\n');  // save msg to log file JSON format
+      writeLogMessage(msg);  // save msg to log file JSON format
 
     }
     //debugPrintln("Msg was for the RELAY");
@@ -850,13 +811,12 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
   if(wellMSG.Radio_ID == DISPLAY_RADIO_ID) {   // ******************** check to see if msg is for DISPLAY UNIT
     //debugPrintln("Msg was for the DISPLAY");
     doc["ST"]     = ONLINE;  // Online
+    loraRCVDScreen();
     notifyClients();  // Update the web clients at DISPLAY UNIT
   }
 
   if(wellMSG.Radio_ID == WEB_RADIO_ID && RELAYROLE) {   // ******************** check to see if msg came DISPLAY UNIT
     //debugPrintln("Msg came from RELAY");
-    //loraRCVDScreen();
-    //delay(1000);
     wellMSG.Radio_ID  = RELAY_ID;
     sendrequestLORA("Relayed LORA msg sent out WELLS");  // change to sent from RELAY and send out via lora to wells
     
@@ -949,15 +909,13 @@ void setup(){  // ****************************   1 Time SETUP
 
 
 	//logo();
-	//delay(500);
-	//Heltec.display -> clear();
 
   if(WIFIMODESTATION){
     WIFISetUp();  // uncomment this to go back to station mode
-    WiFi.mode(WIFI_MODE_STA);  // uncomment this to go back to station mode
+    //Connect to Wi-Fi network with SSID and password
+    WiFi.mode(WIFI_MODE_STA);
     delay(100);
   }else{
-    //Connect to Wi-Fi network with SSID and password
     //Serial.print("Setting AP (Access Point)…");
     // Remove the password parameter, if you want the AP (Access Point) to be open
     if(RELAYROLE)
@@ -1015,9 +973,15 @@ void setup(){  // ****************************   1 Time SETUP
   request->send(200,"text/html"); 
   });
 
+  //server.on("/relaylog.txt", HTTP_GET, [](AsyncWebServerRequest *request){
+  //request->send(SD, "/relaylog.txt","text/html");
+  //});
+
   server.on("/relaylog.txt", HTTP_GET, [](AsyncWebServerRequest *request){
-  request->send(SD, "/relaylog.txt","text/html");
+  request->send(SD, "/relaylog.txt", "application/octet-stream");
   });
+
+
 
   // Start server
   server.begin();
@@ -1032,7 +996,7 @@ void loop() {
   //ws.cleanupClients();
   //digitalWrite(ledPin, ledState);
 
-  delay(200);
+  delay(50);
 
   if(LoRa.available())
     LoRa.receive();
@@ -1041,7 +1005,7 @@ void loop() {
     // debugPrintln("Receive flag true in main loop");
     LoRa.receive(); 
     processLORAMsg(packet);  // Process/discard the message
-    delay(100);
+    delay(50);
     receiveflag = false;
   }
 
