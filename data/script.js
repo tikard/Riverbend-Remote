@@ -125,7 +125,7 @@ function lastmsgtxt(input, msg) {
       text = " (STATUS)";
       switch (s[2]) {
         case "-1":
-          text2 = " Not EMPTY and Not FULL";
+          text2 = " Not EMPTY or FULL";
           break;
         case "0":
           text2 = " TANK EMPTY";
@@ -227,7 +227,7 @@ function addtxt(input, msg) {
       text = " (STATUS)";
       switch (s[2]) {
         case "-1":
-          text2 = " Not EMPTY and Not FULL";
+          text2 = " Not EMPTY or FULL";
           break;
         case "0":
           text2 = " TANK EMPTY";

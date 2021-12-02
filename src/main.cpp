@@ -330,6 +330,23 @@ void loraSentScreen(){
   u8x8.println("SENT........");  
 }
 
+void loraRELAYEDScreen(){
+  String wid = doc["WID"];
+
+  pre();
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+  u8x8.println("DISPLAY Msg");
+  u8x8.println("via RELAY");
+  u8x8.println("Well " + wid);  
+  u8x8.setFont(u8x8_font_7x14B_1x2_r);
+  u8x8.println(printWellMsgType(doc["MT"]));
+
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+  u8x8.println("");
+  u8x8.println(rssi);
+}
+
+
 void loraRCVDScreen(){
   String rid = doc["RID"];
   String wid = doc["WID"];
@@ -408,7 +425,7 @@ void loraRCVDScreen(){
 
     u8x8.setFont(u8x8_font_chroma48medium8_r);
     u8x8.println("");
-    u8x8.println(rssi);  // tracy
+    u8x8.println(rssi);
   }
 }
 
@@ -459,7 +476,7 @@ void sendrequestLORA(String debugMsg){  // send out a request to all wells via L
   serializeJson(doc, requestBody);   // data is in the doc
   //debugPrintln(requestBody);
   send(requestBody, debugMsg); 
-  loraSentScreen();  // tracy
+  loraSentScreen();
 }
 
 void sendKeepAlive(){
@@ -513,7 +530,7 @@ void sendHeartbeatFailure(int wellid){
 
 //void appendFile(fs::FS &fs, const char * path, const char * message){
 void appendFile(fs::FS &fs, const char * path, String message){
-    Serial.printf("Appending to file: %s\n", path);
+    //Serial.printf("Appending to file: %s\n", path);
 
     File file = fs.open(path, "a");
     if(!file){
@@ -816,7 +833,9 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
   }
 
   if(wellMSG.Radio_ID == WEB_RADIO_ID && RELAYROLE) {   // ******************** check to see if msg came DISPLAY UNIT
-    //debugPrintln("Msg came from RELAY");
+    //debugPrintln("Msg came from RELAY"); 
+    loraRELAYEDScreen();
+    //delay(500);
     wellMSG.Radio_ID  = RELAY_ID;
     sendrequestLORA("Relayed LORA msg sent out WELLS");  // change to sent from RELAY and send out via lora to wells
     
