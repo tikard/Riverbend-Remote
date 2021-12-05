@@ -19,6 +19,7 @@
 // Import required libraries
 #include "Arduino.h"
 #include "heltec.h"
+#include "LoRa.h"
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
@@ -27,9 +28,9 @@
 #include "ArduinoJson-v6.18.5.h"
 #include <stdio.h>
 #include <stdlib.h>
-//#include <sqlite3.h>
+#include <sqlite3.h>
 #include "SPI.h"
-//#include "RTClib.h"
+#include "RTClib.h"
 #include "FS.h"
 #include "SD.h"
 
@@ -52,7 +53,7 @@ const int WEB_RADIO_ID = 101;
 #define ONLINE  0
 #define OFFLINE 1
 
-//RTC_DS1307 rtc;  // Real Time Clock
+RTC_DS1307 rtc;  // Real Time Clock
 SPIClass spi1;
 
 #define RELAYLOGFILENAME "/relaylog.txt"
@@ -63,6 +64,8 @@ String packSize = "--";
 String packet;
 String lastpacket;
 IPAddress IP;
+
+DateTime now;
 
 unsigned int sent_msg_counter = 0;
 
@@ -89,7 +92,7 @@ bool toggle = false;
 
 const long HEARTBEAT_DELAY = 2;  // Heartbeat delay in minutes
 
-long keepaliveTimer = 25000;
+long keepaliveTimer = 20000;
 long TIMER1 = 60000 * HEARTBEAT_DELAY;
 long previousMillis = 0;         // Used in peridic timers in main loop
 long previousMillis2 = 0;        // Used in peridic timers in main loop
@@ -153,6 +156,8 @@ AsyncWebSocket ws("/ws");
 // OLED screen setup
 U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
 
+char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+
 String printWellErrorMsgs(int m){
   return Well_Error_Msg_Strings[m];
 }
@@ -213,7 +218,6 @@ String printStates(int s){
 }
 
 
-
 // OLED Functions
 void pre(void)
 {
@@ -224,25 +228,25 @@ void pre(void)
 
 
 // ******************  SQLite Routines
-/*
+
 const char* data = "Callback function called";
 static int callback(void *data, int argc, char **argv, char **azColName){
    int i;
    Serial.printf("%s: ", (const char*)data);
    for (i = 0; i<argc; i++){
-       Serial.printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+       Serial.printf("%s = %s\n\r", azColName[i], argv[i] ? argv[i] : "NULL");
    }
-   Serial.printf("\n");
+   Serial.printf("\n\r");
    return 0;
 }
 
 int openDb(const char *filename, sqlite3 **db) {
    int rc = sqlite3_open(filename, db);
    if (rc) {
-       Serial.printf("Can't open database: %s\n", sqlite3_errmsg(*db));
+       Serial.printf("Can't open database: %s\n\r", sqlite3_errmsg(*db));
        return rc;
    } else {
-       Serial.printf("Opened database successfully\n");
+       Serial.printf("Opened database successfully\n\r");
    }
    return rc;
 }
@@ -253,17 +257,34 @@ int db_exec(sqlite3 *db, const char *sql) {
    long start = micros();
    int rc = sqlite3_exec(db, sql, callback, (void*)data, &zErrMsg);
    if (rc != SQLITE_OK) {
-       Serial.printf("SQL error: %s\n", zErrMsg);
+       Serial.printf("SQL error: %s\n\r", zErrMsg);
        sqlite3_free(zErrMsg);
    } else {
-       Serial.printf("Operation done successfully\n");
+       Serial.printf("Operation done successfully\n\r");
    }
    Serial.print(F("Time taken:"));
    Serial.println(micros()-start);
    return rc;
 }
-*/
 
+
+String makeTimeStamp(){
+  String ts;
+  now = rtc.now();
+  ts = String(now.month(), DEC) + '/' + String(now.day(), DEC)    + '/' + String(now.year(), DEC) + " " + 
+       String(now.hour(), DEC)  + ':' + String(now.minute(), DEC) + ':' + String(now.second(), DEC) + '\t';
+
+  return ts;
+}
+
+String makeSmallTimeStamp(){
+  String ts;
+  now = rtc.now();
+  ts = String(now.month(), DEC) + '/' + String(now.day(), DEC)    +  ' ' + 
+       String(now.hour(), DEC)  + ':' + String(now.minute(), DEC) + ':' + String(now.second(), DEC);
+
+  return ts;
+}
 
 //*******************  Well Functions
 // Helpers to send debug output to right port  change serial port in 1 spot
@@ -354,7 +375,7 @@ void loraRCVDScreen(){
   String mv = doc["MV"];
   int msgradioID = doc["RID"];
 
-  Serial.println("rid = " + rid);
+  //Serial.println("rid = " + rid);
 
   if(msgradioID == RELAY_RADIO_ID){  // msg from wells to relay
     pre();
@@ -458,6 +479,8 @@ void idleScreen(){
   u8x8.println("");
   u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
   u8x8.println("IDLE...");
+  u8x8.setFont(u8x8_font_chroma48medium8_r);
+  u8x8.println(makeSmallTimeStamp());
 }
 
 void send(String msg, String debugMsg)
@@ -501,7 +524,7 @@ void notifyClients() {
   
   serializeJson(doc, requestBody);
 
-  debugPrintln("json :" + requestBody);
+  //debugPrintln("json :" + requestBody);
   ws.textAll(requestBody);
 }
 
@@ -528,41 +551,23 @@ void sendHeartbeatFailure(int wellid){
   delay(50);  // wait a bit before sending out to Display Units
 }
 
-//void appendFile(fs::FS &fs, const char * path, const char * message){
-void appendFile(fs::FS &fs, const char * path, String message){
-    //Serial.printf("Appending to file: %s\n", path);
-
-    File file = fs.open(path, "a");
-    if(!file){
-        Serial.println("Failed to open file for appending");
-        return;
-    }
-    if(file.println(message)){
-      file.flush();
-        //Serial.println("Message appended");
-    } else {
-        Serial.println("Append failed");
-    }
-    file.close();
-}
-
-
 void writeLogMessage(String msg){  // appends msg to the log file
-  appendFile(SD, RELAYLOGFILENAME, msg);  
-/*
+String tsMsg;
+  tsMsg = makeTimeStamp() + ' ' + msg;
+
   File file = SD.open(RELAYLOGFILENAME, FILE_APPEND);
   if(!file){
       Serial.println("Failed to open file for appending");
       return;
   }
-  if(file.println(msg)){
+  if(file.println(tsMsg)){
       //Serial.println("Message appended");
       file.flush();
   } else {
       Serial.println("Append failed");
   }
   file.close();
-*/
+
 }
 
 // *******************  Web Socket routines
@@ -840,7 +845,6 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
     sendrequestLORA("Relayed LORA msg sent out WELLS");  // change to sent from RELAY and send out via lora to wells
     
   }
-
 }
 
 
@@ -863,6 +867,8 @@ void setup(){  // ****************************   1 Time SETUP
   u8x8.begin();  // start up OLED display
 
 	Heltec.begin(false /*DisplayEnable Enable*/, true /*LoRa Enable*/, true /*Serial Enable*/, true /*LoRa use PABOOST*/, BAND /*LoRa RF working band*/);
+
+  LoRa.setTxPowerMax(4);
 
   if(RELAYROLE){  // RELAY records data on SD CARD
 
@@ -899,55 +905,58 @@ void setup(){  // ****************************   1 Time SETUP
   }
 
 //  Setup RTC
-/*
+
  if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
     Serial.flush();
+    while (1) delay(10);
   }
 
-  DateTime now = rtc.now();
-      Serial.print(now.year(), DEC);
-    Serial.print('/');
-    Serial.print(now.month(), DEC);
-    Serial.print('/');
-    Serial.print(now.day(), DEC);
-    Serial.print(" (");
-*/
+/*
+  // got SQLite3 to work
+  sqlite3 *db1;
+  int rc;
 
-   //sqlite3 *db1;
-   //char *zErrMsg = 0;
-   //int rc;
+  sqlite3_initialize();
 
-   //sqlite3_initialize();
-   //rc = db_exec(db1, "SELECT * from history");
+  // Open database 1
+  if (openDb("/sd/wells.db", &db1))
+    return;
+
+   rc = db_exec(db1, "SELECT * from history");
    
-   //if (rc != SQLITE_OK) {
-   //    sqlite3_close(db1);
-   //    return;
-   //}
+   if (rc != SQLITE_OK) {
+      sqlite3_close(db1);
+      return;
+   }
 
-
+*/
 	//logo();
 
   if(WIFIMODESTATION){
-    WIFISetUp();  // uncomment this to go back to station mode
-    //Connect to Wi-Fi network with SSID and password
-    WiFi.mode(WIFI_MODE_STA);
+    WIFISetUp(); 
+    WiFi.mode(WIFI_MODE_STA);  //Connect to Wi-Fi network with SSID and password
     delay(100);
   }else{
-    //Serial.print("Setting AP (Access Point)…");
-    // Remove the password parameter, if you want the AP (Access Point) to be open
     if(RELAYROLE)
-      WiFi.softAP("WellRelay");
+      WiFi.softAP("WellRelay");  // Remove the password parameter, if you want the AP (Access Point) to be open
     else
-      WiFi.softAP("WellDisplay");
-
+      WiFi.softAP("WellDisplay");  // Remove the password parameter, if you want the AP (Access Point) to be open
   }
 
   IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
+  Serial.println(WiFi.localIP());
 
+  chipid=ESP.getEfuseMac();//The chip ID is essentially its MAC address(length: 6 bytes).
+	Serial.printf("ESP32ChipID=%04X",(uint16_t)(chipid>>32));//print High 2 bytes
+	Serial.printf("%08X\n\r",(uint32_t)chipid);//print Low 4bytes.
+  Serial.println("");
+  Serial.printf("ESP32 Chip model = %s Rev %d\n", ESP.getChipModel(), ESP.getChipRevision());
+  Serial.printf("This chip has %d cores\n", ESP.getChipCores());
+  Serial.print("Chip ID: "); Serial.println(chipid);
+  Serial.println("===========================================");
 
   idleScreen();
 
@@ -956,14 +965,8 @@ void setup(){  // ****************************   1 Time SETUP
     debugPrintln("An Error has occurred while mounting SPIFFS");
     return;
   }
-  server.begin();
 
-  Serial.println(WiFi.localIP());
-
-
-	chipid=ESP.getEfuseMac();//The chip ID is essentially its MAC address(length: 6 bytes).
-	Serial.printf("ESP32ChipID=%04X",(uint16_t)(chipid>>32));//print High 2 bytes
-	Serial.printf("%08X\n\r",(uint32_t)chipid);//print Low 4bytes.
+  server.begin();  // Startup the Async Web Server
 
   attachInterrupt(0,interrupt_GPIO0,FALLING);
   
@@ -1000,22 +1003,14 @@ void setup(){  // ****************************   1 Time SETUP
   request->send(SD, "/relaylog.txt", "application/octet-stream");
   });
 
-
-
-  // Start server
-  server.begin();
-
   initWebSocket();   // ************************   Start up WebSockets 
 
 }  // end of SETUP
 
 void loop() {
-  currentMillis = millis();  // used in testing for a regular interval test
+  currentMillis = millis();  // used for timing and regular interval tasks
 
-  //ws.cleanupClients();
-  //digitalWrite(ledPin, ledState);
-
-  delay(50);
+  delay(20);
 
   if(LoRa.available())
     LoRa.receive();
