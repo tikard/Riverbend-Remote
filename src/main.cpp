@@ -47,8 +47,8 @@ const int RELAY_WELL_ID = 99;
 const int DISPLAY_RADIO_ID = 100;
 const int WEB_RADIO_ID = 101;
 
-#define ROLE_GPIO 39
-#define WIFI_GPIO 38
+#define ROLE_GPIO 39  // Used to determine the ROLE of device
+#define WIFI_GPIO 38  // Used to determine STA or AP mode for WiFi
 
 #define ONLINE  0
 #define OFFLINE 1
@@ -56,6 +56,7 @@ const int WEB_RADIO_ID = 101;
 RTC_DS1307 rtc;  // Real Time Clock
 SPIClass spi1;
 
+const char *Configfilename = "/config.txt";  // <- SD library uses 8.3 filenames
 #define RELAYLOGFILENAME "/relaylog.txt"
 #define BAND    915E6  //you can set band here directly,e.g. 868E6,915E6
 
@@ -79,27 +80,21 @@ uint64_t chipid;
 const char* ssid = "firehole";
 const char* password = "cad123dis";
 
-bool ledState = 0;
-const int ledPin = 2;
-
 unsigned long currentMillis;
-
-bool toggle = false;
 
 //************************************ Well Stuff **************************************************  
 
-
-
-const long HEARTBEAT_DELAY = 2;  // Heartbeat delay in minutes
+const long WELLHEARTBEATRATE = 15;    // Well Heartbeat rate in minutes
 
 long keepaliveTimer = 20000;
-long TIMER1 = 60000 * HEARTBEAT_DELAY;
+long OneMinTimer = 60000;
+
 long previousMillis = 0;         // Used in peridic timers in main loop
 long previousMillis2 = 0;        // Used in peridic timers in main loop
 
-const int maxHeartbeatMisses = 4;  // exceed (HEARTBEAT_DELAY)*(maxHeartbeatMisses) minutes
-                                   // this should be greater than the well Heartbeat rate 
-                                   // example well heartbeat 6 mins,  this set to 8  (2*4)
+int maxHeartbeatMisses = WELLHEARTBEATRATE * 2;  // exceed (maxHeartbeatMisses) minutes and well will be marked as OFFLINE
+                                                       // this should be greater than the well Heartbeat rate 
+                                                       // example well heartbeat 10 mins,  this set to 20
 
 typedef struct
   {
@@ -215,6 +210,46 @@ String printStates(int s){
     return "";
     break;
   }
+}
+
+void loadConfiguration(const char *filename) {  
+  File file = SD.open(filename);  // Open file for reading
+
+  // Allocate a temporary JsonDocument
+  // Don't forget to change the capacity to match your requirements.
+  // Use arduinojson.org/v6/assistant to compute the capacity.
+  StaticJsonDocument<256> Configdoc;
+
+  DeserializationError error = deserializeJson(Configdoc, file);   // Deserialize the JSON document
+  if (error)
+    Serial.println(F("Failed to read file, using default configuration"));
+ 
+  maxHeartbeatMisses = Configdoc["MaxHeartbeatMisses"] | 30;   // Copy values from the JsonDocument to the Config
+
+  file.close();  // Close the file (Curiously, File's destructor doesn't close the file)
+}
+
+/*  sample config file named /config.txt
+{
+  "MaxHeartbeatMisses": 20,
+  "port": 2731
+}
+*/
+
+// Prints the content of a file to the Serial
+void printFile(const char *filename) {
+  File file = SD.open(filename);
+  if (!file) {
+    Serial.println(F("Failed to read file"));
+    return;
+  }
+
+  while (file.available()) {
+    Serial.print((char)file.read());
+  }
+  Serial.println();
+
+  file.close();
 }
 
 
@@ -513,6 +548,17 @@ void sendKeepAlive(){
   doc.clear();
 }
 
+void notifyClientsHBFailure(){
+  String requestBody;
+    
+  doc["RID"]  = RELAY_ID;         // Add values in the document
+  doc["WID"]  = wellMSG.Well_ID; // Add values in the document
+  
+  serializeJson(doc, requestBody);
+
+  ws.textAll(requestBody);  
+}
+
 
 void notifyClients() {
   String requestBody;
@@ -523,7 +569,6 @@ void notifyClients() {
   doc["MV"] = wellMSG.Msg_Value;  // Add values in the document
   
   serializeJson(doc, requestBody);
-
   //debugPrintln("json :" + requestBody);
   ws.textAll(requestBody);
 }
@@ -537,7 +582,6 @@ void pushtoDisplayUnits(){  // Send out whole msg to Display units which are lis
   doc["MV"] = wellMSG.Msg_Value; // Add values in the document
   serializeJson(doc, requestBody);
 
-  debugPrintln("Sending MSG via Lora to Display Station");
   debugPrintln("Echo to Display unit = " + requestBody);
 
   send(requestBody, "Pushing LORA  MSG to DISPLAY unit");
@@ -546,9 +590,9 @@ void pushtoDisplayUnits(){  // Send out whole msg to Display units which are lis
 void sendHeartbeatFailure(int wellid){
   doc.clear();
   doc["ST"] = OFFLINE;  // Offline
-  notifyClients();
+  notifyClientsHBFailure(); 
 
-  delay(50);  // wait a bit before sending out to Display Units
+  delay(25);  // wait a bit before sending out to Display Units
 }
 
 void writeLogMessage(String msg){  // appends msg to the log file
@@ -659,15 +703,7 @@ void initWebSocket() {
 }
 
 String processor(const String& var){
-  //debugPrintln(var);
-  if(var == "STATE"){
-    if (ledState){
-      return "ON";
-    }
-    else{
-      return "OFF";
-    }
-  }return " ";
+  return " ";
 }
 
 
@@ -712,9 +748,9 @@ void WIFISetUp(void)
     u8x8.println("FAILED");
 	}
 
-    pre();
-    u8x8.println("WIFI Setup");
-    u8x8.println("Done");
+  pre();
+  u8x8.println("WIFI Setup");
+  u8x8.println("Done");
 
 	delay(500);
 }
@@ -722,8 +758,6 @@ void WIFISetUp(void)
 void logo(){
 }
 
-bool resendflag=false;
-bool deepsleepflag=false;
 
 void interrupt_GPIO0()
 {
@@ -900,9 +934,14 @@ void setup(){  // ****************************   1 Time SETUP
     } else {
         Serial.println("UNKNOWN");
     }
+
+    loadConfiguration(Configfilename);  // load up config values from config file on SD
+    Serial.println("Max Heartbeat Misses : " + String(maxHeartbeatMisses));
+
   }else{
       debugPrintln("ROLE IS DISPLAY");
   }
+
 
 //  Setup RTC
 
@@ -1017,14 +1056,15 @@ void loop() {
 
   if(receiveflag){  // got a packet in on LORA
     // debugPrintln("Receive flag true in main loop");
-    LoRa.receive(); 
+    LoRa.receive();
+    u8x8.begin();  // start up OLED display to fix bug that it goes inverted every day or 2 
     processLORAMsg(packet);  // Process/discard the message
     delay(50);
     receiveflag = false;
   }
 
  
-  if(long(currentMillis - previousMillis) > TIMER1) {  // Periodic tasks
+  if(long(currentMillis - previousMillis) > OneMinTimer) {  // Periodic tasks
     previousMillis = currentMillis; 
 
     for (int i = 0; i < RELAY_ID-1; i++)  // loop over all wells
@@ -1032,7 +1072,7 @@ void loop() {
       if(heartbeatTracking[i].wellID != -1){
         heartbeatTracking[i].missCount++;  // update the miss counts for all wells
 
-        if(heartbeatTracking[i].missCount > maxHeartbeatMisses){
+        if(heartbeatTracking[i].missCount > maxHeartbeatMisses){  // fixme
           debugPrint("Well " );
           debugPrint(heartbeatTracking[i].wellID);
           debugPrintln(" has exceeded expected HEARTBEAT last seen time" );

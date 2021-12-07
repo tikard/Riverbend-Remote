@@ -329,17 +329,19 @@ function onMessage(event) {
 
   updateHeartbeatStatus(lastcmd["WID"] + " " + lastcmd["ST"]);
 
-  lastmsgtxt(
-    "lastmsg",
-    lastcmd["WID"] + " " + lastcmd["MT"] + " " + lastcmd["MV"]
-  );
+  if (msgType) {
+    // only update page if a msgType exists
 
-  addtxt(
-    "msghistory",
-    lastcmd["WID"] + " " + lastcmd["MT"] + " " + lastcmd["MV"]
-  );
+    lastmsgtxt(
+      "lastmsg",
+      lastcmd["WID"] + " " + lastcmd["MT"] + " " + lastcmd["MV"]
+    );
 
-  updateCount();
+    addtxt(
+      "msghistory",
+      lastcmd["WID"] + " " + lastcmd["MT"] + " " + lastcmd["MV"]
+    );
 
-  //addtxt("msghistory", "*** WELL3 is ONLINE ***");
+    updateCount();
+  }
 }
