@@ -51,12 +51,9 @@
 SSD1306Wire  display(0x3c, I2C_SDA, I2C_SCL);
 //SSD1306Wire  display(0x3c, MY_OLED_SDA, MY_OLED_SCL);
 
-
 OLEDDisplayUi ui     ( &display );
 
-enum frame{
-  frameIdle = 0, FrameXmit, FrameRec, FrameRelay
-};
+enum frame{ frameIdle = 0, FrameXmit, FrameRecv, FrameRelay };
 
 frame currentFrame = frameIdle;
 
@@ -404,145 +401,33 @@ String printWellMsgType(WELL_MSG_TYPE wmt){
   }
 }
 
-void loraSentScreen(){
-  //String rid = doc["RID"];
-  //String wid = doc["WID"];
-  //String mt = doc["MT"];
-  //String mv = doc["MV"];
-
+void loraSentScreen(){  // tracy
   ui.switchToFrame(FrameXmit);
   currentFrame = FrameXmit;
   ui.update();
-
-  //pre();
-  //setFont(u8x8_font_chroma48medium8_r);
-  //u8x8.println("XMIT LORA Msg");
-  //u8x8.println("");
-  //u8x8.println("Asking Well " + wid);  
-  //u8x8.setFont(u8x8_font_7x14B_1x2_r);
-  //u8x8.println(printWellMsgType(doc["MT"]));
-
-  //u8x8.setFont(u8x8_font_chroma48medium8_r);
-  //u8x8.println("");
-  //u8x8.println("SENT........");  
 }
 
-void loraRELAYEDScreen(){
-  String wid = doc["WID"];
-
-  pre();
-  //u8x8.setFont(u8x8_font_chroma48medium8_r);
-  //u8x8.println("DISPLAY Msg");
-  //u8x8.println("via RELAY");
-  //u8x8.println("Well " + wid);  
-  //u8x8.setFont(u8x8_font_7x14B_1x2_r);
-  //u8x8.println(printWellMsgType(doc["MT"]));
-
-  //u8x8.setFont(u8x8_font_chroma48medium8_r);
-  //u8x8.println("");
-  //u8x8.println(rssi);
+void loraRELAYEDScreen(){  
+  //LoraRelayFrame
+  ui.switchToFrame(FrameRelay);
+  currentFrame = FrameRelay;
+  ui.update();
 }
 
 
-void loraRCVDScreen(){
-  String rid = doc["RID"];
-  String wid = doc["WID"];
-  String mt = doc["MT"];
-  String mv = doc["MV"];
-  int msgradioID = doc["RID"];
-
-  //Serial.println("rid = " + rid);
-
-  if(msgradioID == RELAY_RADIO_ID){  // msg from wells to relay
-    pre();
-    //u8x8.setFont(u8x8_font_chroma48medium8_r);
-    //u8x8.println("LORA WELL Msg");
-    //u8x8.println("");
-    //u8x8.println("Well " + wid);  
-    //u8x8.setFont(u8x8_font_7x14B_1x2_r);
-    //u8x8.println(printWellMsgType(doc["MT"]));
-
-    int temp = doc["MT"];
-    int tmv = doc["MV"];
-    switch (temp)
-    {
-    case WELL_MSG_TYPE::WELL_STATE :
-        //u8x8.println(printStates(tmv));
-      break;
-    case WELL_MSG_TYPE::WELL_STATUS :
-        //u8x8.println(printWellStatusCodes(tmv));
-      break;
-    case WELL_MSG_TYPE::WELL_ERRORS:
-        //u8x8.println(printWellErrorMsgs(tmv));
-      break;
-    case WELL_MSG_TYPE::HEARTBEAT :
-      //u8x8.println(String(tmv));
-      break;
-    default:
-      break;
-    }
-
-    //u8x8.println(mv);
-
-    //u8x8.setFont(u8x8_font_chroma48medium8_r);
-    //u8x8.println("");
-    //u8x8.println(rssi);
-  }
-
-  if(msgradioID == DISPLAY_RADIO_ID){  // msg from DISPLAY to relay
-    pre();
-    //u8x8.setFont(u8x8_font_chroma48medium8_r);
-    //u8x8.println("DISPLAY Msg");
-    //u8x8.println("");
-    //u8x8.println("Well " + wid);  
-    //u8x8.setFont(u8x8_font_7x14B_1x2_r);
-    //u8x8.println(printWellMsgType(doc["MT"]));
-
-    int temp = doc["MT"];
-    int tmv = doc["MV"];
-    switch (temp)
-    {
-    case WELL_MSG_TYPE::WELL_STATE :
-      //u8x8.println(printStates(tmv));
-      break;
-    case WELL_MSG_TYPE::WELL_STATUS :
-        //u8x8.println(printWellStatusCodes(tmv));
-      break;
-    case WELL_MSG_TYPE::WELL_ERRORS:
-        //u8x8.println(printWellErrorMsgs(tmv));
-      break;
-    case WELL_MSG_TYPE::HEARTBEAT :
-      //u8x8.println(String(tmv));
-      break;
-    default:
-      break;
-    }
-
-    //u8x8.println(mv);
-
-    //u8x8.setFont(u8x8_font_chroma48medium8_r);
-    //u8x8.println("");
-    //u8x8.println(rssi);
-  }
+void loraRCVDScreen(){  // tracy
+  //LoraRcvdFrame
+  ui.switchToFrame(FrameRecv);
+  currentFrame = FrameRecv;
+  ui.update();
 }
 
 
 void idleScreen(){  
-
   ui.switchToFrame(frameIdle);
   currentFrame = frameIdle;
   ui.update();
 
-  //pre();
-  //u8x8.setFont(u8x8_font_chroma48medium8_r);
-  //u8x8.println("Mode: " + roleModeString);
-  //u8x8.println("WiFi:" + wifiModeString);
-  //u8x8.println("");
-  //u8x8.println(ipString);
-  //u8x8.println("");
-  //u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
-  //u8x8.println("IDLE...");
-  //u8x8.setFont(u8x8_font_chroma48medium8_r);
   //u8x8.println(makeSmallTimeStamp());
 }
 
@@ -612,7 +497,7 @@ void pushtoDisplayUnits(){  // Send out whole msg to Display units which are lis
 
   debugPrintln("Echo to Display unit = " + requestBody);
 
-  send(requestBody, "Pushing LORA  MSG to DISPLAY unit");
+  //send(requestBody, "Pushing LORA  MSG to DISPLAY unit");  tracy
 }
 
 void sendHeartbeatFailure(int wellid){
@@ -956,39 +841,136 @@ void LoraSentFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, i
   display->setFont(ArialMT_Plain_10);
 
   display->drawString(0 + x, 0 + y, "XMIT LORA Msg");
+  Serial.print("Wid is ");
+  Serial.println(wid);
   //display->drawString(0 + x, 11 + y, "Asking Well " + wid);
-  //display->drawString(0 + x, 22 + y, printWellMsgType(doc["MT"]));
   display->drawString(0 + x, 11 + y, "Asking Well  15");
-  display->drawString(0 + x, 22 + y, printWellMsgType(WELL_MSG_TYPE::WELL_STATUS));
+  display->drawString(0 + x, 22 + y, printWellMsgType(doc["MT"]));
+  //display->drawString(0 + x, 11 + y, "Asking Well  15");
+  //display->drawString(0 + x, 22 + y, printWellMsgType(WELL_MSG_TYPE::WELL_STATUS));
   display->setFont(ArialMT_Plain_24);
   display->drawString(0 + x, 33 + y, "SENT...");
 
 }
 
-void drawFrame3(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
-  // Text alignment demo
-  display->setFont(ArialMT_Plain_10);
+void LoraRelayFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  String wid = doc["WID"];
 
-  // The coordinates define the left starting point of the text
+  //pre();
+  //u8x8.setFont(u8x8_font_chroma48medium8_r);
+  //u8x8.println("DISPLAY Msg");
+  //u8x8.println("via RELAY");
+  //u8x8.println("Well " + wid);  
+  //u8x8.setFont(u8x8_font_7x14B_1x2_r);
+  //u8x8.println(printWellMsgType(doc["MT"]));
+
+  //u8x8.setFont(u8x8_font_chroma48medium8_r);
+  //u8x8.println("");
+  //u8x8.println(rssi);
+
   display->setTextAlignment(TEXT_ALIGN_LEFT);
-  display->drawString(0 + x, 11 + y, "Left aligned (0,10)");
-
-  // The coordinates define the center of the text
-  display->setTextAlignment(TEXT_ALIGN_CENTER);
-  display->drawString(64 + x, 22 + y, "Center aligned (64,22)");
-
-  // The coordinates define the right end of the text
-  display->setTextAlignment(TEXT_ALIGN_RIGHT);
-  display->drawString(128 + x, 33 + y, "Right aligned (128,33)");
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(0 + x, 0 + y, "DISPLAY Msg via Relay");
+  display->drawString(0 + x, 11 + y, "Well " + wid);
+  display->drawString(0 + x, 22 + y, printWellMsgType(doc["MT"]));
+  //display->drawString(0 + x, 22 + y, printWellMsgType(WELL_MSG_TYPE::WELL_STATUS));
+  display->drawString(0 + x, 33 + y, rssi);
 }
 
-void drawFrame4(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
-  // Demo for drawStringMaxWidth:
-  // with the third parameter you can define the width after which words will be wrapped.
-  // Currently only spaces and "-" are allowed for wrapping
-  display->setTextAlignment(TEXT_ALIGN_LEFT);
-  display->setFont(ArialMT_Plain_10);
-  display->drawStringMaxWidth(0 + x, 10 + y, 128, "Lorem ipsum\n dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore.");
+void LoraRcvdFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+
+  String rid = doc["RID"];
+  String wid = doc["WID"];
+  String mt = doc["MT"];
+  String mv = doc["MV"];
+  int msgradioID = doc["RID"];
+
+  //Serial.println("rid = " + rid);
+
+  if(msgradioID == RELAY_RADIO_ID){  // msg from wells to relay
+    //pre();
+    //u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.println("LORA WELL Msg");
+    //u8x8.println("");
+    //u8x8.println("Well " + wid);  
+    //u8x8.setFont(u8x8_font_7x14B_1x2_r);
+    //u8x8.println(printWellMsgType(doc["MT"]));
+
+    display->setTextAlignment(TEXT_ALIGN_LEFT);
+    display->setFont(ArialMT_Plain_10);
+    display->drawString(0 + x, 0 + y, "LORA WELL Msg");
+    display->drawString(0 + x, 11 + y, "Well " + wid);
+    //display->drawString(0 + x, 22 + y, printWellMsgType(doc["MT"]));
+    display->drawString(0 + x, 22 + y, printWellMsgType(WELL_MSG_TYPE::WELL_STATUS));
+    
+
+    int temp = doc["MT"];
+    int tmv = doc["MV"];
+    switch (temp)
+    {
+    case WELL_MSG_TYPE::WELL_STATE :
+        //u8x8.println(printStates(tmv));
+        display->drawString(0 + x, 33 + y, rssi);
+      break;
+    case WELL_MSG_TYPE::WELL_STATUS :
+        //u8x8.println(printWellStatusCodes(tmv));
+        display->drawString(0 + x, 33 + y, rssi);
+      break;
+    case WELL_MSG_TYPE::WELL_ERRORS:
+        //u8x8.println(printWellErrorMsgs(tmv));
+        display->drawString(0 + x, 33 + y, rssi);
+      break;
+    case WELL_MSG_TYPE::HEARTBEAT :
+      //u8x8.println(String(tmv));
+      display->drawString(0 + x, 33 + y, rssi);
+      break;
+    default:
+      break;
+    }
+
+    //u8x8.println(mv);
+
+    //u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.println("");
+    //u8x8.println(rssi);
+    display->drawString(0 + x, 44 + y, rssi);
+  }
+
+  if(msgradioID == DISPLAY_RADIO_ID){  // msg from DISPLAY to relay
+    //pre();
+    //u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.println("DISPLAY Msg");
+    //u8x8.println("");
+    //u8x8.println("Well " + wid);  
+    //u8x8.setFont(u8x8_font_7x14B_1x2_r);
+    //u8x8.println(printWellMsgType(doc["MT"]));
+
+    int temp = doc["MT"];
+    int tmv = doc["MV"];
+    switch (temp)
+    {
+    case WELL_MSG_TYPE::WELL_STATE :
+      //u8x8.println(printStates(tmv));
+      break;
+    case WELL_MSG_TYPE::WELL_STATUS :
+        //u8x8.println(printWellStatusCodes(tmv));
+      break;
+    case WELL_MSG_TYPE::WELL_ERRORS:
+        //u8x8.println(printWellErrorMsgs(tmv));
+      break;
+    case WELL_MSG_TYPE::HEARTBEAT :
+      //u8x8.println(String(tmv));
+      break;
+    default:
+      break;
+    }
+
+    //u8x8.println(mv);
+
+    //u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.println("");
+    //u8x8.println(rssi);
+  }
 }
 
 void drawFrame5(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
@@ -1084,7 +1066,7 @@ static void drawIconScreen(const char *upperMsg, OLEDDisplay *display, OLEDDispl
     // Please note that everything that should be transitioned
     // needs to be drawn relative to x and y
 
-    display->drawXbm(x + 54, y + 14, WiFi_Logo_width, WiFi_Logo_height, WiFi_Logo_bits);  // tracy
+    display->drawXbm(x + 54, y + 14, WiFi_Logo_width, WiFi_Logo_height, WiFi_Logo_bits);
 
     display->setFont(ArialMT_Plain_10);
     display->setTextAlignment(TEXT_ALIGN_LEFT);
@@ -1106,10 +1088,10 @@ static const int bootFrameCount = sizeof(bootFrames) / sizeof(bootFrames[0]);
 
 // This array keeps function pointers to all frames
 // frames are the single views that slide in
-FrameCallback frames[] = { IdleFrame, LoraSentFrame, drawFrame3, drawFrame4, drawFrame5 };
+FrameCallback frames[] = { IdleFrame, LoraSentFrame, LoraRcvdFrame, LoraRelayFrame };
 
-// how many frames are there?
-int frameCount = 5;
+
+int frameCount = 4;  // how many frames are there?
 
 // Overlays are statically drawn on top of a frame eg. a clock
 OverlayCallback overlays[] = { msOverlay };
@@ -1243,14 +1225,15 @@ void setup(){  // ****************************   1 Time SETUP
 
 // Make sure and turn this back on......  TRACY
 //  Setup RTC
+
 /*
  if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
     Serial.flush();
     while (1) delay(10);
   }
-
- */ 
+*/
+ 
 
 /*
   // got SQLite3 to work
