@@ -7,6 +7,8 @@
   Initial commit to Github
   Version 0.1  Full working version thru Well_Receiver to Riverbend Well Unit  11/19/21
   version 0.2  Full working with added Display Unit which sends well commands thru RELAY  11/28/21
+  Had to revert changes for new display type
+  
 
 
 
