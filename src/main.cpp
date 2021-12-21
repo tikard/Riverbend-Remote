@@ -1416,7 +1416,7 @@ void loop() {
   if(long(currentMillis - previousMillis2) > keepaliveTimer) {  // Periodic tasks
     previousMillis2 = currentMillis; 
     sendKeepAlive();
-    pre();
+    //pre();
     idleScreen();
   }
 
