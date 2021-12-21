@@ -274,14 +274,13 @@ function addtxt(input, msg) {
 
   obj.value =
     d.toTimeString().substring(0, 7) +
-    ":" +
-    "\t" +
-    "WELL " +
+    ": " +
+    msg +
+    "  WELL " +
     s[0] +
-    "\t" +
+    "  " +
     text +
-    "\t" +
-    "msg-> " +
+    " msg->" +
     text2 +
     "\n" +
     obj.value;
