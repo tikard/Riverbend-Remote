@@ -14,13 +14,16 @@
           Jumper Pin 38 HIGH = WiFi Station       or  Low = WiFi Access Point (WellDisplay SSID No PW)
 
 
-  trying to use a branch to fix things.... New-Display-Features Branch
-  
-
 *********/
 
 // Import required libraries
 #include "Arduino.h"
+#include <SSD1306Wire.h> // legacy include: `#include "SSD1306.h"`
+// Include the UI lib
+#include <OLEDDisplayUi.h>
+
+//#define ENABLEHELTECDISPLAY  // enable Heltec lib with this had conflicts with SSD1306Wire.h
+
 #include "heltec.h"
 #include "LoRa.h"
 #include <WiFi.h>
@@ -37,12 +40,32 @@
 #include "FS.h"
 #include "SD.h"
 
-#include <U8x8lib.h>
+//#include <U8x8lib.h>
 
 
+
+#include <OneButton.h>
+
+#include "configuration.h"
+
+SSD1306Wire  display(0x3c, I2C_SDA, I2C_SCL);
+//SSD1306Wire  display(0x3c, MY_OLED_SDA, MY_OLED_SCL);
+
+OLEDDisplayUi ui     ( &display );
+
+enum frame{ frameIdle = 0, FrameXmit, FrameRecv, FrameRelay };
+
+frame currentFrame = frameIdle;
 
 boolean RELAYROLE       = true;   // false is DISPLAY mode
 boolean WIFIMODESTATION = true;   // false is DISPLAY mode
+
+String wifiModeString = "";
+String roleModeString = "";
+String ipString = "";
+
+int remainingTimeBudget = 0;
+  
 
 const int RELAY_ID = 99;
 const int RELAY_RADIO_ID = 99;
@@ -55,6 +78,13 @@ const int WEB_RADIO_ID = 101;
 
 #define ONLINE  0
 #define OFFLINE 1
+
+//static uint16_t displayWidth, displayHeight;
+
+#define SCREEN_WIDTH displayWidth
+#define SCREEN_HEIGHT displayHeight
+
+#define getStringCenteredX(s) ((SCREEN_WIDTH - display->getStringWidth(s)) / 2)
 
 RTC_DS1307 rtc;  // Real Time Clock
 SPIClass spi1;
@@ -90,7 +120,7 @@ unsigned long currentMillis;
 const long WELLHEARTBEATRATE = 15;    // Well Heartbeat rate in minutes
 
 long keepaliveTimer = 20000;
-long OneMinTimer = 60000;
+long OneMinTimer = 60010;
 
 long previousMillis = 0;         // Used in peridic timers in main loop
 long previousMillis2 = 0;        // Used in peridic timers in main loop
@@ -152,7 +182,8 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
 // OLED screen setup
-U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
+//U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
+
 
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
@@ -259,9 +290,9 @@ void printFile(const char *filename) {
 // OLED Functions
 void pre(void)
 {
-  u8x8.setFont(u8x8_font_chroma48medium8_r); 
-  u8x8.clear();
-  u8x8.setCursor(0,0);
+  //u8x8.setFont(u8x8_font_chroma48medium8_r); 
+  //u8x8.clear();
+  //u8x8.setCursor(0,0);
 }
 
 
@@ -370,155 +401,34 @@ String printWellMsgType(WELL_MSG_TYPE wmt){
   }
 }
 
-void loraSentScreen(){
-  String rid = doc["RID"];
-  String wid = doc["WID"];
-  String mt = doc["MT"];
-  String mv = doc["MV"];
-
-  pre();
-  u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.println("XMIT LORA Msg");
-  u8x8.println("");
-  u8x8.println("Asking Well " + wid);  
-  u8x8.setFont(u8x8_font_7x14B_1x2_r);
-  u8x8.println(printWellMsgType(doc["MT"]));
-
-  u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.println("");
-  u8x8.println("SENT........");  
+void loraSentScreen(){  // tracy
+  ui.switchToFrame(FrameXmit);
+  currentFrame = FrameXmit;
+  ui.update();
 }
 
-void loraRELAYEDScreen(){
-  String wid = doc["WID"];
-
-  pre();
-  u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.println("DISPLAY Msg");
-  u8x8.println("via RELAY");
-  u8x8.println("Well " + wid);  
-  u8x8.setFont(u8x8_font_7x14B_1x2_r);
-  u8x8.println(printWellMsgType(doc["MT"]));
-
-  u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.println("");
-  u8x8.println(rssi);
+void loraRELAYEDScreen(){  
+  //LoraRelayFrame
+  ui.switchToFrame(FrameRelay);
+  currentFrame = FrameRelay;
+  ui.update();
 }
 
 
-void loraRCVDScreen(){
-  String rid = doc["RID"];
-  String wid = doc["WID"];
-  String mt = doc["MT"];
-  String mv = doc["MV"];
-  int msgradioID = doc["RID"];
-
-  //Serial.println("rid = " + rid);
-
-  if(msgradioID == RELAY_RADIO_ID){  // msg from wells to relay
-    pre();
-    u8x8.setFont(u8x8_font_chroma48medium8_r);
-    u8x8.println("LORA WELL Msg");
-    u8x8.println("");
-    u8x8.println("Well " + wid);  
-    u8x8.setFont(u8x8_font_7x14B_1x2_r);
-    u8x8.println(printWellMsgType(doc["MT"]));
-
-    int temp = doc["MT"];
-    int tmv = doc["MV"];
-    switch (temp)
-    {
-    case WELL_MSG_TYPE::WELL_STATE :
-      u8x8.println(printStates(tmv));
-      break;
-    case WELL_MSG_TYPE::WELL_STATUS :
-        u8x8.println(printWellStatusCodes(tmv));
-      break;
-    case WELL_MSG_TYPE::WELL_ERRORS:
-        u8x8.println(printWellErrorMsgs(tmv));
-      break;
-    case WELL_MSG_TYPE::HEARTBEAT :
-      u8x8.println(String(tmv));
-      break;
-    default:
-      break;
-    }
-
-    u8x8.println(mv);
-
-    u8x8.setFont(u8x8_font_chroma48medium8_r);
-    u8x8.println("");
-    u8x8.println(rssi);
-  }
-
-  if(msgradioID == DISPLAY_RADIO_ID){  // msg from DISPLAY to relay
-    pre();
-    u8x8.setFont(u8x8_font_chroma48medium8_r);
-    u8x8.println("DISPLAY Msg");
-    u8x8.println("");
-    u8x8.println("Well " + wid);  
-    u8x8.setFont(u8x8_font_7x14B_1x2_r);
-    u8x8.println(printWellMsgType(doc["MT"]));
-
-    int temp = doc["MT"];
-    int tmv = doc["MV"];
-    switch (temp)
-    {
-    case WELL_MSG_TYPE::WELL_STATE :
-      u8x8.println(printStates(tmv));
-      break;
-    case WELL_MSG_TYPE::WELL_STATUS :
-        u8x8.println(printWellStatusCodes(tmv));
-      break;
-    case WELL_MSG_TYPE::WELL_ERRORS:
-        u8x8.println(printWellErrorMsgs(tmv));
-      break;
-    case WELL_MSG_TYPE::HEARTBEAT :
-      u8x8.println(String(tmv));
-      break;
-    default:
-      break;
-    }
-
-    u8x8.println(mv);
-
-    u8x8.setFont(u8x8_font_chroma48medium8_r);
-    u8x8.println("");
-    u8x8.println(rssi);
-  }
+void loraRCVDScreen(){  // tracy
+  //LoraRcvdFrame
+  ui.switchToFrame(FrameRecv);
+  currentFrame = FrameRecv;
+  ui.update();
 }
 
 
 void idleScreen(){  
-  String wifiModeString = "";
-  String roleModeString = "";
-  String ipString = "";
+  ui.switchToFrame(frameIdle);
+  currentFrame = frameIdle;
+  ui.update();
 
-  if(WIFIMODESTATION){
-    wifiModeString = "STA Mode";
-    ipString = WiFi.localIP().toString();
-  }
-  else{
-    wifiModeString = "AP Mode";
-    ipString = String(IP);
-  }
-
-  if(RELAYROLE)
-    roleModeString = "RELAY";
-  else
-    roleModeString = "DISPLAY";
-
-  pre();
-  u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.println("Mode: " + roleModeString);
-  u8x8.println("WiFi:" + wifiModeString);
-  u8x8.println("");
-  u8x8.println(ipString);
-  u8x8.println("");
-  u8x8.setFont(u8x8_font_px437wyse700b_2x2_r);
-  u8x8.println("IDLE...");
-  u8x8.setFont(u8x8_font_chroma48medium8_r);
-  u8x8.println(makeSmallTimeStamp());
+  //u8x8.println(makeSmallTimeStamp());
 }
 
 void send(String msg, String debugMsg)
@@ -587,7 +497,7 @@ void pushtoDisplayUnits(){  // Send out whole msg to Display units which are lis
 
   debugPrintln("Echo to Display unit = " + requestBody);
 
-  send(requestBody, "Pushing LORA  MSG to DISPLAY unit");
+  //send(requestBody, "Pushing LORA  MSG to DISPLAY unit");  tracy
 }
 
 void sendHeartbeatFailure(int wellid){
@@ -730,30 +640,31 @@ void WIFISetUp(void)
 		count ++;
 		delay(500);
 
-    pre();
-    u8x8.println("Connecting...");
-    u8x8.println(ssid);
+    //pre();
+    //u8x8.println("Connecting...");
+    //u8x8.println(ssid);
 
     debugPrintln("Trying to connect ");
     debugPrintln(count);
+    ui.update();
 	}
 
 	if(WiFi.status() == WL_CONNECTED)
 	{
-    pre();
-    u8x8.println("Connected");
-    u8x8.println(ssid);
+    //pre();
+    //u8x8.println("Connected");
+    //u8x8.println(ssid);
 	}
 	else
 	{
-    pre();
-    u8x8.println("Connection");
-    u8x8.println("FAILED");
+    //pre();
+    //u8x8.println("Connection");
+    //u8x8.println("FAILED");
 	}
 
-  pre();
-  u8x8.println("WIFI Setup");
-  u8x8.println("Done");
+  //pre();
+  //u8x8.println("WIFI Setup");
+  //u8x8.println("Done");
 
 	delay(500);
 }
@@ -883,11 +794,379 @@ void processLORAMsg(String msg){  // process a JSON msg from a well station LORA
     
   }
 }
+// ***************************    Screen Stuff
+
+void msOverlay(OLEDDisplay *display, OLEDDisplayUiState* state) {
+  display->setTextAlignment(TEXT_ALIGN_RIGHT);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(128, 0, String(millis()));
+}
+
+void IdleFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  // draw an xbm image.
+  // Please note that everything that should be transitioned
+  // needs to be drawn relative to x and y
+
+  //display->drawXbm(x + 34, y + 14, WiFi_Logo_width, WiFi_Logo_height, WiFi_Logo_bits);
+  display->setFont(ArialMT_Plain_10);
+
+  // The coordinates define the left starting point of the text
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+  display->drawString(0 + x, 0 + y, "WiFi:" + wifiModeString);
+  display->drawString(0 + x, 11 + y, ipString);
+  display->drawString(0 + x, 22 + y, "Mode: " + roleModeString);
+  display->setFont(ArialMT_Plain_24);
+  display->drawString(0 + x, 33 + y, "IDLE");
+
+}
+
+void LoraSentFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  String rid = doc["RID"];
+  String wid = doc["WID"];
+  String mt = doc["MT"];
+  String mv = doc["MV"];
+
+  //pre();
+  //setFont(u8x8_font_chroma48medium8_r);
+  //u8x8.println("XMIT LORA Msg");
+  //u8x8.println("");
+  //u8x8.println("Asking Well " + wid);  
+  //u8x8.setFont(u8x8_font_7x14B_1x2_r);
+  //u8x8.println(printWellMsgType(doc["MT"]));
+
+  //u8x8.setFont(u8x8_font_chroma48medium8_r);
+  //u8x8.println("");
+  //u8x8.println("SENT........");  
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+  display->setFont(ArialMT_Plain_10);
+
+  display->drawString(0 + x, 0 + y, "XMIT LORA Msg");
+  Serial.print("Wid is ");
+  Serial.println(wid);
+  //display->drawString(0 + x, 11 + y, "Asking Well " + wid);
+  display->drawString(0 + x, 11 + y, "Asking Well  15");
+  display->drawString(0 + x, 22 + y, printWellMsgType(doc["MT"]));
+  //display->drawString(0 + x, 11 + y, "Asking Well  15");
+  //display->drawString(0 + x, 22 + y, printWellMsgType(WELL_MSG_TYPE::WELL_STATUS));
+  display->setFont(ArialMT_Plain_24);
+  display->drawString(0 + x, 33 + y, "SENT...");
+
+}
+
+void LoraRelayFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  String wid = doc["WID"];
+
+  //pre();
+  //u8x8.setFont(u8x8_font_chroma48medium8_r);
+  //u8x8.println("DISPLAY Msg");
+  //u8x8.println("via RELAY");
+  //u8x8.println("Well " + wid);  
+  //u8x8.setFont(u8x8_font_7x14B_1x2_r);
+  //u8x8.println(printWellMsgType(doc["MT"]));
+
+  //u8x8.setFont(u8x8_font_chroma48medium8_r);
+  //u8x8.println("");
+  //u8x8.println(rssi);
+
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+  display->setFont(ArialMT_Plain_10);
+  display->drawString(0 + x, 0 + y, "DISPLAY Msg via Relay");
+  display->drawString(0 + x, 11 + y, "Well " + wid);
+  display->drawString(0 + x, 22 + y, printWellMsgType(doc["MT"]));
+  //display->drawString(0 + x, 22 + y, printWellMsgType(WELL_MSG_TYPE::WELL_STATUS));
+  display->drawString(0 + x, 33 + y, rssi);
+}
+
+void LoraRcvdFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+
+  String rid = doc["RID"];
+  String wid = doc["WID"];
+  String mt = doc["MT"];
+  String mv = doc["MV"];
+  int msgradioID = doc["RID"];
+
+  //Serial.println("rid = " + rid);
+
+  if(msgradioID == RELAY_RADIO_ID){  // msg from wells to relay
+    //pre();
+    //u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.println("LORA WELL Msg");
+    //u8x8.println("");
+    //u8x8.println("Well " + wid);  
+    //u8x8.setFont(u8x8_font_7x14B_1x2_r);
+    //u8x8.println(printWellMsgType(doc["MT"]));
+
+    display->setTextAlignment(TEXT_ALIGN_LEFT);
+    display->setFont(ArialMT_Plain_10);
+    display->drawString(0 + x, 0 + y, "LORA WELL Msg");
+    display->drawString(0 + x, 11 + y, "Well " + wid);
+    //display->drawString(0 + x, 22 + y, printWellMsgType(doc["MT"]));
+    display->drawString(0 + x, 22 + y, printWellMsgType(WELL_MSG_TYPE::WELL_STATUS));
+    
+
+    int temp = doc["MT"];
+    int tmv = doc["MV"];
+    switch (temp)
+    {
+    case WELL_MSG_TYPE::WELL_STATE :
+        //u8x8.println(printStates(tmv));
+        display->drawString(0 + x, 33 + y, rssi);
+      break;
+    case WELL_MSG_TYPE::WELL_STATUS :
+        //u8x8.println(printWellStatusCodes(tmv));
+        display->drawString(0 + x, 33 + y, rssi);
+      break;
+    case WELL_MSG_TYPE::WELL_ERRORS:
+        //u8x8.println(printWellErrorMsgs(tmv));
+        display->drawString(0 + x, 33 + y, rssi);
+      break;
+    case WELL_MSG_TYPE::HEARTBEAT :
+      //u8x8.println(String(tmv));
+      display->drawString(0 + x, 33 + y, rssi);
+      break;
+    default:
+      break;
+    }
+
+    //u8x8.println(mv);
+
+    //u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.println("");
+    //u8x8.println(rssi);
+    display->drawString(0 + x, 44 + y, rssi);
+  }
+
+  if(msgradioID == DISPLAY_RADIO_ID){  // msg from DISPLAY to relay
+    //pre();
+    //u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.println("DISPLAY Msg");
+    //u8x8.println("");
+    //u8x8.println("Well " + wid);  
+    //u8x8.setFont(u8x8_font_7x14B_1x2_r);
+    //u8x8.println(printWellMsgType(doc["MT"]));
+
+    int temp = doc["MT"];
+    int tmv = doc["MV"];
+    switch (temp)
+    {
+    case WELL_MSG_TYPE::WELL_STATE :
+      //u8x8.println(printStates(tmv));
+      break;
+    case WELL_MSG_TYPE::WELL_STATUS :
+        //u8x8.println(printWellStatusCodes(tmv));
+      break;
+    case WELL_MSG_TYPE::WELL_ERRORS:
+        //u8x8.println(printWellErrorMsgs(tmv));
+      break;
+    case WELL_MSG_TYPE::HEARTBEAT :
+      //u8x8.println(String(tmv));
+      break;
+    default:
+      break;
+    }
+
+    //u8x8.println(mv);
+
+    //u8x8.setFont(u8x8_font_chroma48medium8_r);
+    //u8x8.println("");
+    //u8x8.println(rssi);
+  }
+}
+
+void drawFrame5(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  display->setFont(ArialMT_Plain_10);
+
+  // The coordinates define the left starting point of the text
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+  display->drawString(0 + x, 11 + y, "Merry XMAS June");
+
+  // The coordinates define the center of the text
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->drawString(64 + x, 22 + y, "Love ya.....");
+
+
+}
+
+
+class ButtonThread
+{
+// Prepare for button presses
+    OneButton userButton;
+
+    static bool shutdown_on_long_stop;
+
+  public:
+    static uint32_t longPressTime;
+
+    // callback returns the period for the next callback invocation (or 0 if we should no longer be called)
+    ButtonThread()
+    {
+        userButton = OneButton(BUTTON_PIN, true, true);
+
+        userButton.attachClick(userButtonPressed);
+        userButton.attachDuringLongPress(userButtonPressedLong);
+        userButton.attachDoubleClick(userButtonDoublePressed);
+        userButton.attachLongPressStart(userButtonPressedLongStart);
+        userButton.attachLongPressStop(userButtonPressedLongStop);
+    }
+
+    void Tick(){
+      userButton.tick();
+    }
+
+  protected:
+    /// If the button is pressed we suppress CPU sleep until release
+    int32_t runOnce()
+    {
+        userButton.tick();
+        return 5;
+    }
+
+  private:
+    static void userButtonPressed()
+    {
+      Serial.println("press!\n");
+      ui.nextFrame();
+    }
+
+    static void userButtonPressedLong()
+    {
+        Serial.println("Long press!\n");
+
+        // If user button is held down for 5 seconds, shutdown the device.
+        if (millis() - longPressTime > 5 * 1000) {
+          Serial.println("Long press > 5 secs!\n");
+        } else {
+            Serial.printf("Long press %u\n", (uint32_t)(millis() - longPressTime));
+        }
+    }
+
+    static void userButtonDoublePressed()
+    {
+      Serial.println("Double press\n");
+      ui.previousFrame();
+    }
+
+    static void userButtonPressedLongStart()
+    {
+        Serial.println("Long press start!\n");
+        longPressTime = millis();
+    }
+
+    static void userButtonPressedLongStop()
+    {
+        Serial.println("Long press stop!\n");
+        longPressTime = 0;
+    }
+};
+
+static void drawIconScreen(const char *upperMsg, OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
+{
+    // draw an xbm image.
+    // Please note that everything that should be transitioned
+    // needs to be drawn relative to x and y
+
+    display->drawXbm(x + 54, y + 14, WiFi_Logo_width, WiFi_Logo_height, WiFi_Logo_bits);
+
+    display->setFont(ArialMT_Plain_10);
+    display->setTextAlignment(TEXT_ALIGN_LEFT);
+    const char *title = "Configuring";
+    display->setTextAlignment(TEXT_ALIGN_LEFT);
+    display->drawString(0 + x, 11 + y, title);
+}
+
+
+static void drawBootScreen(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
+{
+    drawIconScreen(NULL, display, state, x, y);
+}
+
+
+
+static FrameCallback bootFrames[] = {drawBootScreen};
+static const int bootFrameCount = sizeof(bootFrames) / sizeof(bootFrames[0]);
+
+// This array keeps function pointers to all frames
+// frames are the single views that slide in
+FrameCallback frames[] = { IdleFrame, LoraSentFrame, LoraRcvdFrame, LoraRelayFrame };
+
+
+int frameCount = 4;  // how many frames are there?
+
+// Overlays are statically drawn on top of a frame eg. a clock
+OverlayCallback overlays[] = { msOverlay };
+int overlaysCount = 1;
+
+
+static ButtonThread  *buttonThread;
+uint32_t ButtonThread::longPressTime = 0;
+
 
 
 void setup(){  // ****************************   1 Time SETUP 
 
   Serial.begin(115200);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB
+  }
+
+  Serial.println("Starting up Display");
+
+  buttonThread = new ButtonThread();  // create a new button to move thru screens
+
+  // needed to INIT the OLED
+  #ifdef RESET_OLED
+      pinMode(RESET_OLED, OUTPUT);
+      digitalWrite(RESET_OLED, 1);
+  #endif
+
+  // The ESP is capable of rendering 60fps in 80Mhz mode
+	// but that won't give you much time for anything else
+	// run it in 160Mhz mode or just set it to 30 fps
+  ui.setTargetFPS(10);
+
+	// Customize the active and inactive symbol
+  ui.setActiveSymbol(activeSymbol);
+  ui.setInactiveSymbol(inactiveSymbol);
+
+  // You can change this to
+  // TOP, LEFT, BOTTOM, RIGHT
+  ui.setIndicatorPosition(BOTTOM);
+
+  // Defines where the first frame is located in the bar.
+  ui.setIndicatorDirection(LEFT_RIGHT);
+
+  // You can change the transition that is used
+  // SLIDE_LEFT, SLIDE_RIGHT, SLIDE_UP, SLIDE_DOWN
+  ui.setFrameAnimation(SLIDE_LEFT);
+
+  // Add frames (Start with boot/WIFI seq)
+  ui.setFrames(bootFrames, bootFrameCount);
+  // No overlays.
+  ui.setOverlays(nullptr, 0);
+
+
+  // Initialising the UI will init the display too.
+
+  ui.init();
+  ui.init();
+
+  display.flipScreenVertically();
+
+      // Require presses to switch between frames.
+  ui.disableAutoTransition();
+
+  // On some ssd1306 clones, the first draw command is discarded, so draw it
+  // twice initially.
+  ui.update();
+  ui.update();
+
+
+// ****    End of screen setup 
+
+	Heltec.begin(false /*DisplayEnable Enable*/, true /*LoRa Enable*/, true /*Serial Enable*/, true /*LoRa use PABOOST*/, BAND /*LoRa RF working band*/);
+
+
   pinMode(ROLE_GPIO, INPUT_PULLDOWN);
   pinMode(WIFI_GPIO, INPUT_PULLDOWN);
 
@@ -901,9 +1180,8 @@ void setup(){  // ****************************   1 Time SETUP
     heartbeatTracking[i].missCount = 0;
   }
   
-  u8x8.begin();  // start up OLED display
+  //u8x8.begin();  // start up OLED display
 
-	Heltec.begin(false /*DisplayEnable Enable*/, true /*LoRa Enable*/, true /*Serial Enable*/, true /*LoRa use PABOOST*/, BAND /*LoRa RF working band*/);
 
   LoRa.setTxPowerMax(4);
 
@@ -945,14 +1223,17 @@ void setup(){  // ****************************   1 Time SETUP
       debugPrintln("ROLE IS DISPLAY");
   }
 
-
+// Make sure and turn this back on......  TRACY
 //  Setup RTC
 
+/*
  if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
     Serial.flush();
     while (1) delay(10);
   }
+*/
+ 
 
 /*
   // got SQLite3 to work
@@ -974,6 +1255,8 @@ void setup(){  // ****************************   1 Time SETUP
 
 */
 	//logo();
+
+
 
   if(WIFIMODESTATION){
     WIFISetUp(); 
@@ -1000,6 +1283,34 @@ void setup(){  // ****************************   1 Time SETUP
   Serial.print("Chip ID: "); Serial.println(chipid);
   Serial.println("===========================================");
 
+
+  // setup some global vars to tell us status and states
+  if(WIFIMODESTATION){
+    wifiModeString = "STA Mode";
+    ipString = WiFi.localIP().toString();
+  }
+  else{
+    wifiModeString = "AP Mode";
+    ipString = String(IP);
+  }
+
+  if(RELAYROLE)
+    roleModeString = "RELAY";
+  else
+    roleModeString = "DISPLAY";
+
+
+
+
+  // Change frames to cycle thru the normal Xmit, Rcvd, etc
+  ui.setFrames(frames, frameCount);
+
+  // Add overlays
+  //ui.setOverlays(overlays, overlaysCount);
+  ui.setOverlays(nullptr, 0);
+
+  ui.update();
+
   idleScreen();
 
   // Mount up SPIFF for use
@@ -1010,7 +1321,7 @@ void setup(){  // ****************************   1 Time SETUP
 
   server.begin();  // Startup the Async Web Server
 
-  attachInterrupt(0,interrupt_GPIO0,FALLING);
+  //attachInterrupt(0,interrupt_GPIO0,FALLING);
   
 	LoRa.onReceive(onLORAReceive);
 
@@ -1047,12 +1358,20 @@ void setup(){  // ****************************   1 Time SETUP
 
   initWebSocket();   // ************************   Start up WebSockets 
 
+
+
 }  // end of SETUP
 
 void loop() {
+  
   currentMillis = millis();  // used for timing and regular interval tasks
 
-  delay(20);
+
+  remainingTimeBudget = ui.update();  // must be called to update UI
+  buttonThread->Tick();
+
+  delay(10);
+
 
   if(LoRa.available())
     LoRa.receive();
@@ -1060,7 +1379,7 @@ void loop() {
   if(receiveflag){  // got a packet in on LORA
     // debugPrintln("Receive flag true in main loop");
     LoRa.receive();
-    u8x8.begin();  // start up OLED display to fix bug that it goes inverted every day or 2 
+    //u8x8.begin();  // start up OLED display to fix bug that it goes inverted every day or 2 
     processLORAMsg(packet);  // Process/discard the message
     delay(50);
     receiveflag = false;
@@ -1070,12 +1389,12 @@ void loop() {
   if(long(currentMillis - previousMillis) > OneMinTimer) {  // Periodic tasks
     previousMillis = currentMillis; 
 
-    for (int i = 0; i < RELAY_ID-1; i++)  // loop over all wells
+    for (int i = 1; i < RELAY_ID-1; i++)  // loop over all wells
     { 
       if(heartbeatTracking[i].wellID != -1){
         heartbeatTracking[i].missCount++;  // update the miss counts for all wells
 
-        if(heartbeatTracking[i].missCount > maxHeartbeatMisses){  // fixme
+        if(heartbeatTracking[i].missCount > maxHeartbeatMisses){
           debugPrint("Well " );
           debugPrint(heartbeatTracking[i].wellID);
           debugPrintln(" has exceeded expected HEARTBEAT last seen time" );
@@ -1087,7 +1406,6 @@ void loop() {
           //debugPrint(" count ");
           //debugPrintln(heartbeatTracking[i].missCount);
         }
-
       }
     }
 
