@@ -14,6 +14,9 @@
           Jumper Pin 38 HIGH = WiFi Station       or  Low = WiFi Access Point (WellDisplay SSID No PW)
 
 
+  trying to use a branch to fix things.... New-Display-Features Branch
+  
+
 *********/
 
 // Import required libraries
