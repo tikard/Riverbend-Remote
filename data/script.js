@@ -1,4 +1,4 @@
-// Complete project details: https://randomnerdtutorials.com/esp8266-nodemcu-web-server-websocket-sliders/
+// Javascript to support well page
 
 var gateway = `ws://${window.location.hostname}/ws`;
 var websocket;
@@ -274,13 +274,14 @@ function addtxt(input, msg) {
 
   obj.value =
     d.toTimeString().substring(0, 7) +
-    ": " +
-    msg +
-    "  WELL " +
+    ":" +
+    "\t" +
+    "WELL " +
     s[0] +
-    "  " +
+    "\t" +
     text +
-    " msg->" +
+    "\t" +
+    "msg-> " +
     text2 +
     "\n" +
     obj.value;
