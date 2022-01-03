@@ -41,6 +41,10 @@
 boolean RELAYROLE       = true;   // false is DISPLAY mode
 boolean WIFIMODESTATION = true;   // false is DISPLAY mode
 
+String wifiModeString = "";
+String roleModeString = "";
+String ipString = "";
+
 const int RELAY_ID = 99;
 const int RELAY_RADIO_ID = 99;
 const int RELAY_WELL_ID = 99;
@@ -52,6 +56,10 @@ const int WEB_RADIO_ID = 101;
 
 #define ONLINE  0
 #define OFFLINE 1
+
+enum Screens{ ScreenIdle = 0, XmitScreen, RecvScreen, RelayScreen };
+Screens currentScreen = ScreenIdle;
+long previousScreenMillis = 0;        // Saves millis when a screen is displayed used to help idlescreen
 
 RTC_DS1307 rtc;  // Real Time Clock
 SPIClass spi1;
@@ -86,7 +94,7 @@ unsigned long currentMillis;
 
 const long WELLHEARTBEATRATE = 15;    // Well Heartbeat rate in minutes
 
-long keepaliveTimer = 20000;
+long keepaliveTimer = 15 * 1000;      // Timer to move to IDLE Screen in seconds
 long OneMinTimer = 60000;
 
 long previousMillis = 0;         // Used in peridic timers in main loop
@@ -368,6 +376,7 @@ String printWellMsgType(WELL_MSG_TYPE wmt){
 }
 
 void loraSentScreen(){
+  currentScreen = XmitScreen;
   String rid = doc["RID"];
   String wid = doc["WID"];
   String mt = doc["MT"];
@@ -384,9 +393,12 @@ void loraSentScreen(){
   u8x8.setFont(u8x8_font_chroma48medium8_r);
   u8x8.println("");
   u8x8.println("SENT........");  
+
+  previousScreenMillis = millis();        // Saves millis when a screen is displayed used to help idlescreen
 }
 
 void loraRELAYEDScreen(){
+  currentScreen = RelayScreen;
   String wid = doc["WID"];
 
   pre();
@@ -400,10 +412,15 @@ void loraRELAYEDScreen(){
   u8x8.setFont(u8x8_font_chroma48medium8_r);
   u8x8.println("");
   u8x8.println(rssi);
+
+  previousScreenMillis = millis();        // Saves millis when a screen is displayed used to help idlescreen
+
 }
 
 
 void loraRCVDScreen(){
+  currentScreen = RecvScreen;
+
   String rid = doc["RID"];
   String wid = doc["WID"];
   String mt = doc["MT"];
@@ -446,6 +463,7 @@ void loraRCVDScreen(){
     u8x8.setFont(u8x8_font_chroma48medium8_r);
     u8x8.println("");
     u8x8.println(rssi);
+    
   }
 
   if(msgradioID == DISPLAY_RADIO_ID){  // msg from DISPLAY to relay
@@ -483,27 +501,14 @@ void loraRCVDScreen(){
     u8x8.println("");
     u8x8.println(rssi);
   }
+
+  previousScreenMillis = millis();        // Saves millis when a screen is displayed used to help idlescreen
 }
 
 
 void idleScreen(){  
-  String wifiModeString = "";
-  String roleModeString = "";
-  String ipString = "";
 
-  if(WIFIMODESTATION){
-    wifiModeString = "STA Mode";
-    ipString = WiFi.localIP().toString();
-  }
-  else{
-    wifiModeString = "AP Mode";
-    ipString = String(IP);
-  }
-
-  if(RELAYROLE)
-    roleModeString = "RELAY";
-  else
-    roleModeString = "DISPLAY";
+  currentScreen = ScreenIdle;
 
   pre();
   u8x8.setFont(u8x8_font_chroma48medium8_r);
@@ -915,13 +920,11 @@ void setup(){  // ****************************   1 Time SETUP
 
     if(!SD.begin(22, spi1)){
         Serial.println("Card Mount Failed");
-        //return;
     }
     uint8_t cardType = SD.cardType();
 
     if(cardType == CARD_NONE){
         Serial.println("No SD card attached");
-        //return;
     }
 
     Serial.print("SD Card Type: ");
@@ -943,12 +946,17 @@ void setup(){  // ****************************   1 Time SETUP
   }
 
 
-//  Setup RTC
-
- if (! rtc.begin()) {
+  //  Setup RTC Real Time Clock
+  int maxRTCretries = 10;
+  if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
     Serial.flush();
-    while (1) delay(10);
+    int i = 0;
+    while (i++ < maxRTCretries ){ 
+      delay(10);
+    }
+  }else{
+    Serial.println("RTC enabled");
   }
 
 /*
@@ -996,6 +1004,20 @@ void setup(){  // ****************************   1 Time SETUP
   Serial.printf("This chip has %d cores\n", ESP.getChipCores());
   Serial.print("Chip ID: "); Serial.println(chipid);
   Serial.println("===========================================");
+
+  if(WIFIMODESTATION){
+    wifiModeString = "STA Mode";
+    ipString = WiFi.localIP().toString();
+  }
+  else{
+    wifiModeString = "AP Mode";
+    ipString = String(IP);
+  }
+
+  if(RELAYROLE)
+    roleModeString = "RELAY";
+  else
+    roleModeString = "DISPLAY";
 
   idleScreen();
 
@@ -1092,11 +1114,22 @@ void loop() {
 
   }
 
-  if(long(currentMillis - previousMillis2) > keepaliveTimer) {  // Periodic tasks
+  if(long(currentMillis - previousMillis2) > keepaliveTimer) {  // Short Interval Periodic tasks 
     previousMillis2 = currentMillis; 
-    sendKeepAlive();
-    pre();
-    idleScreen();
+    sendKeepAlive();  // keep websockets from dying
+
+    //Serial.print("Free Heap is : ");
+    //Serial.println(ESP.getFreeHeap()); 
+
+    
+
+    if(currentScreen == ScreenIdle){
+      idleScreen();
+    }else{
+      if(long(currentMillis - previousScreenMillis) > 10000){   // let last status screen stay up for at least 10 secs
+        idleScreen();
+      }
+    }
   }
 
 
